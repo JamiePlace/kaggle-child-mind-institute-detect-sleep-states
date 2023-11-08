@@ -18,7 +18,10 @@ def trace(title):
     delta = m1 - m0
     sign = "+" if delta >= 0 else "-"
     delta = math.fabs(delta)
-    print(f"[{m1:.1f}GB({sign}{delta:.1f}GB):{time.time() - t0:.1f}sec] {title} ", file=sys.stderr)
+    print(
+        f"[{m1:.1f}GB({sign}{delta:.1f}GB):{time.time() - t0:.1f}sec] {title} ",
+        file=sys.stderr,
+    )
 
 
 def pad_if_needed(x: np.ndarray, max_len: int, pad_value: float = 0.0) -> np.ndarray:

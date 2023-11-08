@@ -44,7 +44,13 @@ class LSTMFeatureExtractor(nn.Module):
             x = x.squeeze(1)  # x: (batch_size, in_channels, output_size)
         x = x.transpose(1, 2)  # x: (batch_size, output_size, in_channels)
         x = self.fc(x)  # x: (batch_size, output_size, hidden_size)
-        x, _ = self.lstm(x)  # x: (batch_size, output_size, hidden_size * num_directions)
-        x = x.transpose(1, 2)  # x: (batch_size, hidden_size * num_directions, output_size)
-        x = x.unsqueeze(1)  # x: (batch_size, out_chans, hidden_size * num_directions, time_steps)
+        x, _ = self.lstm(
+            x
+        )  # x: (batch_size, output_size, hidden_size * num_directions)
+        x = x.transpose(
+            1, 2
+        )  # x: (batch_size, hidden_size * num_directions, output_size)
+        x = x.unsqueeze(
+            1
+        )  # x: (batch_size, out_chans, hidden_size * num_directions, time_steps)
         return x

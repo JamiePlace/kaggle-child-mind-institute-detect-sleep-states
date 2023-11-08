@@ -31,7 +31,10 @@ def get_feature_extractor(
         )
     elif cfg.name == "PANNsFeatureExtractor":
         feature_extractor = PANNsFeatureExtractor(
-            in_channels=feature_dim, output_size=num_timesteps, conv=nn.Conv1d, **cfg.params
+            in_channels=feature_dim,
+            output_size=num_timesteps,
+            conv=nn.Conv1d,
+            **cfg.params,
         )
     elif cfg.name == "LSTMFeatureExtractor":
         feature_extractor = LSTMFeatureExtractor(
@@ -90,7 +93,9 @@ def get_model(
         feature_extractor = get_feature_extractor(
             cfg.feature_extractor, feature_dim, num_timesteps
         )
-        decoder = get_decoder(cfg.decoder, feature_extractor.height, n_classes, num_timesteps)
+        decoder = get_decoder(
+            cfg.decoder, feature_extractor.height, n_classes, num_timesteps
+        )
         model = Spec2DCNN(
             feature_extractor=feature_extractor,
             decoder=decoder,
@@ -104,7 +109,9 @@ def get_model(
         feature_extractor = get_feature_extractor(
             cfg.feature_extractor, feature_dim, num_timesteps
         )
-        decoder = get_decoder(cfg.decoder, feature_extractor.height, n_classes, num_timesteps)
+        decoder = get_decoder(
+            cfg.decoder, feature_extractor.height, n_classes, num_timesteps
+        )
         model = Spec1D(
             feature_extractor=feature_extractor,
             decoder=decoder,

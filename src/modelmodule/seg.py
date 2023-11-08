@@ -27,7 +27,9 @@ class SegModel(LightningModule):
         super().__init__()
         self.cfg = cfg
         self.val_event_df = val_event_df
-        num_timesteps = nearest_valid_size(int(duration * cfg.upsample_rate), cfg.downsample_rate)
+        num_timesteps = nearest_valid_size(
+            int(duration * cfg.upsample_rate), cfg.downsample_rate
+        )
         self.model = get_model(
             cfg,
             feature_dim=feature_dim,
@@ -50,6 +52,8 @@ class SegModel(LightningModule):
         return self.__share_step(batch, "val")
 
     def __share_step(self, batch, mode: str) -> torch.Tensor:
+        do_mixup = False
+        do_cutmix = False
         if mode == "train":
             do_mixup = np.random.rand() < self.cfg.aug.mixup_prob
             do_cutmix = np.random.rand() < self.cfg.aug.cutmix_prob
@@ -115,8 +119,12 @@ class SegModel(LightningModule):
             score_th=self.cfg.pp.score_th,
             distance=self.cfg.pp.distance,
         )
-        score = event_detection_ap(self.val_event_df.to_pandas(), val_pred_df.to_pandas())
-        self.log("val_score", score, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+        score = event_detection_ap(
+            self.val_event_df.to_pandas(), val_pred_df.to_pandas()
+        )
+        self.log(
+            "val_score", score, on_step=False, on_epoch=True, logger=True, prog_bar=True
+        )
 
         if loss < self.__best_loss:
             np.save("keys.npy", np.array(keys))
@@ -132,6 +140,8 @@ class SegModel(LightningModule):
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
         scheduler = get_cosine_schedule_with_warmup(
-            optimizer, num_training_steps=self.trainer.max_steps, **self.cfg.scheduler
+            optimizer,
+            num_training_steps=self.trainer.max_steps,
+            num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]

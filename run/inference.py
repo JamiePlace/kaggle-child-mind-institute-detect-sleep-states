@@ -18,7 +18,9 @@ from src.utils.post_process import post_process_for_seg
 
 
 def load_model(cfg: InferenceConfig) -> nn.Module:
-    num_timesteps = nearest_valid_size(int(cfg.duration * cfg.upsample_rate), cfg.downsample_rate)
+    num_timesteps = nearest_valid_size(
+        int(cfg.duration * cfg.upsample_rate), cfg.downsample_rate
+    )
     model = get_model(
         cfg,
         feature_dim=len(cfg.features),
@@ -30,7 +32,10 @@ def load_model(cfg: InferenceConfig) -> nn.Module:
     # load weights
     if cfg.weight is not None:
         weight_path = (
-            Path(cfg.dir.model_dir) / cfg.weight.exp_name / cfg.weight.run_name / "best_model.pth"
+            Path(cfg.dir.model_dir)
+            / cfg.weight.exp_name
+            / cfg.weight.run_name
+            / "best_model.pth"
         )
         model.load_state_dict(torch.load(weight_path))
         print('load weight from "{}"'.format(weight_path))
@@ -118,7 +123,9 @@ def main(cfg: InferenceConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with trace("inference"):
-        keys, preds = inference(cfg.duration, test_dataloader, model, device, use_amp=cfg.use_amp)
+        keys, preds = inference(
+            cfg.duration, test_dataloader, model, device, use_amp=cfg.use_amp
+        )
 
     with trace("make submission"):
         sub_df = make_submission(

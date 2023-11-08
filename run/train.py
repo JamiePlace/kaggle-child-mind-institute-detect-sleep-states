@@ -10,11 +10,14 @@ from pytorch_lightning.callbacks import (
     RichModelSummary,
     RichProgressBar,
 )
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.loggers.wandb import WandbLogger
 
 from src.conf import TrainConfig
 from src.datamodule.seg import SegDataModule
 from src.modelmodule.seg import SegModel
+
+# performance due to my class gpu
+torch.set_float32_matmul_precision("medium")
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s:%(name)s - %(message)s"
@@ -50,14 +53,15 @@ def main(cfg: TrainConfig):
         name=cfg.exp_name,
         project="child-mind-institute-detect-sleep-states",
     )
-    pl_logger.log_hyperparams(cfg)
+
+    # pl_logger.log_hyperparams(cfg)
 
     trainer = Trainer(
         # env
         default_root_dir=Path.cwd(),
         # num_nodes=cfg.training.num_gpus,
         accelerator=cfg.trainer.accelerator,
-        precision=16 if cfg.trainer.use_amp else 32,
+        precision="16-mixed" if cfg.trainer.use_amp else "32",
         # training
         fast_dev_run=cfg.trainer.debug,  # run only 1 train batch and 1 val batch
         max_epochs=cfg.trainer.epochs,
@@ -73,6 +77,8 @@ def main(cfg: TrainConfig):
         check_val_every_n_epoch=cfg.trainer.check_val_every_n_epoch,
     )
 
+    # this doesn't work smh
+    # TODO fix
     trainer.fit(model, datamodule=datamodule)
 
     # load best weights

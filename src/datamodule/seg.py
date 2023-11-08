@@ -26,7 +26,9 @@ def load_features(
     features = {}
 
     if series_ids is None:
-        series_ids = [series_dir.name for series_dir in (processed_dir / phase).glob("*")]
+        series_ids = [
+            series_dir.name for series_dir in (processed_dir / phase).glob("*")
+        ]
 
     for series_id in series_ids:
         series_dir = processed_dir / phase / series_id
@@ -48,7 +50,9 @@ def load_chunk_features(
     features = {}
 
     if series_ids is None:
-        series_ids = [series_dir.name for series_dir in (processed_dir / phase).glob("*")]
+        series_ids = [
+            series_dir.name for series_dir in (processed_dir / phase).glob("*")
+        ]
 
     for series_id in series_ids:
         series_dir = processed_dir / phase / series_id
@@ -114,7 +118,9 @@ def gaussian_kernel(length: int, sigma: int = 3) -> np.ndarray:
 def gaussian_label(label: np.ndarray, offset: int, sigma: int) -> np.ndarray:
     num_events = label.shape[1]
     for i in range(num_events):
-        label[:, i] = np.convolve(label[:, i], gaussian_kernel(offset, sigma), mode="same")
+        label[:, i] = np.convolve(
+            label[:, i], gaussian_kernel(offset, sigma), mode="same"
+        )
 
     return label
 
@@ -130,7 +136,9 @@ def negative_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
         int: negative sample position
     """
     # onsetとwakupを除いた範囲からランダムにサンプリング
-    positive_positions = set(this_event_df[["onset", "wakeup"]].to_numpy().flatten().tolist())
+    positive_positions = set(
+        this_event_df[["onset", "wakeup"]].to_numpy().flatten().tolist()
+    )
     negative_positions = list(set(range(num_steps)) - positive_positions)
     return random.sample(negative_positions, 1)[0]
 
@@ -178,7 +186,9 @@ class TrainDataset(Dataset):
         pos = self.event_df.at[idx, event]
         series_id = self.event_df.at[idx, "series_id"]
         self.event_df["series_id"]
-        this_event_df = self.event_df.query("series_id == @series_id").reset_index(drop=True)
+        this_event_df = self.event_df.query("series_id == @series_id").reset_index(
+            drop=True
+        )
         # extract data matching series_id
         this_feature = self.features[series_id]  # (n_steps, num_features)
         n_steps = this_feature.shape[0]
@@ -192,7 +202,9 @@ class TrainDataset(Dataset):
         feature = this_feature[start:end]  # (duration, num_features)
 
         # upsample
-        feature = torch.FloatTensor(feature.T).unsqueeze(0)  # (1, num_features, duration)
+        feature = torch.FloatTensor(feature.T).unsqueeze(
+            0
+        )  # (1, num_features, duration)
         feature = resize(
             feature,
             size=[self.num_features, self.upsampled_num_frames],
@@ -203,7 +215,9 @@ class TrainDataset(Dataset):
         num_frames = self.upsampled_num_frames // self.cfg.downsample_rate
         label = get_label(this_event_df, num_frames, self.cfg.duration, start, end)
         label[:, [1, 2]] = gaussian_label(
-            label[:, [1, 2]], offset=self.cfg.dataset.offset, sigma=self.cfg.dataset.sigma
+            label[:, [1, 2]],
+            offset=self.cfg.dataset.offset,
+            sigma=self.cfg.dataset.sigma,
         )
 
         return {
@@ -239,7 +253,9 @@ class ValidDataset(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         feature = self.chunk_features[key]
-        feature = torch.FloatTensor(feature.T).unsqueeze(0)  # (1, num_features, duration)
+        feature = torch.FloatTensor(feature.T).unsqueeze(
+            0
+        )  # (1, num_features, duration)
         feature = resize(
             feature,
             size=[self.num_features, self.upsampled_num_frames],
@@ -285,7 +301,9 @@ class TestDataset(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         feature = self.chunk_features[key]
-        feature = torch.FloatTensor(feature.T).unsqueeze(0)  # (1, num_features, duration)
+        feature = torch.FloatTensor(feature.T).unsqueeze(
+            0
+        )  # (1, num_features, duration)
         feature = resize(
             feature,
             size=[self.num_features, self.upsampled_num_frames],

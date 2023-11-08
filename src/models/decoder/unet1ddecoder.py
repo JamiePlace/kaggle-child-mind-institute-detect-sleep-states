@@ -69,7 +69,13 @@ class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
 
     def __init__(
-        self, in_channels, out_channels, scale_factor, norm=nn.BatchNorm1d, se=False, res=False
+        self,
+        in_channels,
+        out_channels,
+        scale_factor,
+        norm=nn.BatchNorm1d,
+        se=False,
+        res=False,
     ):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
@@ -85,17 +91,29 @@ class Up(nn.Module):
     """Upscaling then double conv"""
 
     def __init__(
-        self, in_channels, out_channels, bilinear=True, scale_factor=2, norm=nn.BatchNorm1d
+        self,
+        in_channels,
+        out_channels,
+        bilinear=True,
+        scale_factor=2,
+        norm=nn.BatchNorm1d,
     ):
         super().__init__()
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=scale_factor, mode="bilinear", align_corners=True)
-            self.conv = DoubleConv(in_channels, out_channels, in_channels // 2, norm=norm)
+            self.up = nn.Upsample(
+                scale_factor=scale_factor, mode="bilinear", align_corners=True
+            )
+            self.conv = DoubleConv(
+                in_channels, out_channels, in_channels // 2, norm=norm
+            )
         else:
             self.up = nn.ConvTranspose1d(
-                in_channels, in_channels // 2, kernel_size=scale_factor, stride=scale_factor
+                in_channels,
+                in_channels // 2,
+                kernel_size=scale_factor,
+                stride=scale_factor,
             )
             self.conv = DoubleConv(in_channels, out_channels, norm=norm)
 
@@ -138,13 +156,22 @@ class UNet1DDecoder(nn.Module):
             self.n_channels, 64, norm=partial(create_layer_norm, length=self.duration)
         )
         self.down1 = Down(
-            64, 128, scale_factor, norm=partial(create_layer_norm, length=self.duration // 2)
+            64,
+            128,
+            scale_factor,
+            norm=partial(create_layer_norm, length=self.duration // 2),
         )
         self.down2 = Down(
-            128, 256, scale_factor, norm=partial(create_layer_norm, length=self.duration // 4)
+            128,
+            256,
+            scale_factor,
+            norm=partial(create_layer_norm, length=self.duration // 4),
         )
         self.down3 = Down(
-            256, 512, scale_factor, norm=partial(create_layer_norm, length=self.duration // 8)
+            256,
+            512,
+            scale_factor,
+            norm=partial(create_layer_norm, length=self.duration // 8),
         )
         self.down4 = Down(
             512,
@@ -174,7 +201,11 @@ class UNet1DDecoder(nn.Module):
             norm=partial(create_layer_norm, length=self.duration // 2),
         )
         self.up4 = Up(
-            128, 64, bilinear, scale_factor, norm=partial(create_layer_norm, length=self.duration)
+            128,
+            64,
+            bilinear,
+            scale_factor,
+            norm=partial(create_layer_norm, length=self.duration),
         )
 
         self.cls = nn.Sequential(
