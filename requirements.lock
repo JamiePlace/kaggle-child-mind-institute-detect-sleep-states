@@ -26,6 +26,7 @@ certifi==2023.7.22
 cffi==1.16.0
 charset-normalizer==3.3.0
 click==8.1.7
+colorama==0.4.6
 colorlog==6.7.0
 contourpy==1.1.1
 cycler==0.12.1
@@ -80,7 +81,6 @@ pandas==2.1.1
 parso==0.8.3
 pathspec==0.11.2
 pathtools==0.1.2
-pexpect==4.8.0
 pickleshare==0.7.5
 pillow==10.0.1
 platformdirs==3.11.0
@@ -90,7 +90,6 @@ pretrainedmodels==0.7.4
 prompt-toolkit==3.0.39
 protobuf==4.24.4
 psutil==5.9.5
-ptyprocess==0.7.0
 pure-eval==0.2.2
 pyarrow==13.0.0
 pycparser==2.21
@@ -140,7 +139,6 @@ tornado==6.3.3
 tqdm==4.66.1
 traitlets==5.11.2
 transformers==4.33.3
-triton==2.1.0
 types-pyyaml==6.0.12.12
 types-tqdm==4.66.0.2
 typing-extensions==4.8.0
