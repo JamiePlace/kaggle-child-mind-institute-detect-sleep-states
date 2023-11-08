@@ -54,7 +54,7 @@ def main(cfg: TrainConfig):
         project="child-mind-institute-detect-sleep-states",
     )
 
-    # pl_logger.log_hyperparams(cfg)
+    pl_logger.log_hyperparams(cfg) # type: ignore
 
     trainer = Trainer(
         # env
