@@ -163,30 +163,52 @@ class TrainDataset(Dataset):
     def __init__(
         self,
         cfg: TrainConfig,
-        event_df: pl.DataFrame,
-        features: dict[str, np.ndarray],
+        event_df_path: Path,
+        features_path: Path,
     ):
         self.cfg = cfg
-        self.event_df: pd.DataFrame = (
+        self.features_path = features_path
+        self.event_df_path = event_df_path
+        # both the event df and features need to be assigned on the first
+        # call to get item. this is due to memory mapping and pickling
+        # cringe....
+        self.event_df = None
+
+    def load_data(self):
+        event_df = pl.read_csv(self.event_df_path).drop_nulls()
+        self.event_df = (
             event_df.pivot(index=["series_id", "night"], columns="event", values="step")
             .drop_nulls()
             .to_pandas()
         )
-        self.features = features
-        self.num_features = len(cfg.features)
+        self.features = load_features(
+            feature_names=self.cfg.features,
+            series_ids=self.cfg.split.train_series_ids,
+            processed_dir=self.features_path,
+            phase="train",
+        )
+        self.num_features = len(self.cfg.features)
         self.upsampled_num_frames = nearest_valid_size(
             int(self.cfg.duration * self.cfg.upsample_rate), self.cfg.downsample_rate
         )
 
     def __len__(self):
-        return len(self.event_df)
+        if self.event_df is None:
+            return len(
+                pl.read_csv(self.event_df_path)
+                .drop_nulls()
+                .pivot(index=["series_id", "night"], columns="event", values="step")
+                .drop_nulls()
+            )
+        return len(self.event_df)  # type: ignore
 
     def __getitem__(self, idx):
+        if self.event_df is None:
+            self.load_data()
         event = np.random.choice(["onset", "wakeup"], p=[0.5, 0.5])
-        pos = self.event_df.at[idx, event]
-        series_id = self.event_df.at[idx, "series_id"]
-        self.event_df["series_id"]
-        this_event_df = self.event_df.query("series_id == @series_id").reset_index(
+        pos = self.event_df.at[idx, event]  # type: ignore
+        series_id = self.event_df.at[idx, "series_id"]  # type: ignore
+        this_event_df = self.event_df.query("series_id == @series_id").reset_index(  # type: ignore
             drop=True
         )
         # extract data matching series_id
@@ -333,12 +355,12 @@ class SegDataModule(LightningDataModule):
             pl.col("series_id").is_in(self.cfg.split.valid_series_ids)
         )
         # train data
-        self.train_features = load_features(
-            feature_names=self.cfg.features,
-            series_ids=self.cfg.split.train_series_ids,
-            processed_dir=self.processed_dir,
-            phase="train",
-        )
+        # self.train_features = load_features(
+        #    feature_names=self.cfg.features,
+        #    series_ids=self.cfg.split.train_series_ids,
+        #    processed_dir=self.processed_dir,
+        #    phase="train",
+        # )
 
         # valid data
         self.valid_chunk_features = load_chunk_features(
@@ -352,8 +374,8 @@ class SegDataModule(LightningDataModule):
     def train_dataloader(self):
         train_dataset = TrainDataset(
             cfg=self.cfg,
-            event_df=self.train_event_df,
-            features=self.train_features,
+            event_df_path=self.data_dir / "train_events.csv",
+            features_path=self.processed_dir,
         )
         train_loader = DataLoader(
             train_dataset,

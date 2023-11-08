@@ -27,7 +27,7 @@ trainer:
   epochs: 50
   accelerator: auto
   use_amp: true
-  debug: false
+  debug: true
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
   monitor: val_loss
@@ -36,7 +36,7 @@ trainer:
 
 dataset:
   batch_size: 64
-  num_workers: 24
+  num_workers: 5
   offset: 10
   sigma: 10
   bg_sampling_rate: 0.5

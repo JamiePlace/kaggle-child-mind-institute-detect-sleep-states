@@ -10,7 +10,11 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true
-        }
-    ]
+            "justMyCode": false,
+            "args": [
+                "exp_name=expdebug",
+                "dataset.batch_size=32"
+            ]
+        },
+    ],
 }

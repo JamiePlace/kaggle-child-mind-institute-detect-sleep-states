@@ -20,7 +20,7 @@ from src.modelmodule.seg import SegModel
 torch.set_float32_matmul_precision("medium")
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s:%(name)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s:%(name)s - %(message)s"
 )
 LOGGER = logging.getLogger(Path(__file__).name)
 
@@ -54,7 +54,7 @@ def main(cfg: TrainConfig):
         project="child-mind-institute-detect-sleep-states",
     )
 
-    pl_logger.log_hyperparams(cfg) # type: ignore
+    pl_logger.log_hyperparams(cfg)  # type: ignore
 
     trainer = Trainer(
         # env
@@ -76,7 +76,6 @@ def main(cfg: TrainConfig):
         sync_batchnorm=True,
         check_val_every_n_epoch=cfg.trainer.check_val_every_n_epoch,
     )
-
     # this doesn't work smh
     # TODO fix
     trainer.fit(model, datamodule=datamodule)
