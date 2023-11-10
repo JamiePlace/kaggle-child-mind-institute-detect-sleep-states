@@ -9,22 +9,22 @@ from kaggle.api.kaggle_api_extended import KaggleApi
 
 def copy_files_with_exts(source_dir: Path, dest_dir: Path, exts: list):
     """
-    source_dir: 探索開始ディレクトリ
-    dest_dir: コピー先のディレクトリ
-    exts: 対象の拡張子のリスト (例: ['.txt', '.jpg'])
+    source_dir: source directory of model
+    dest_dir: destination directory
+    exts: list of target extensions (e.g.: ['.txt', '.jpg'])
     """
 
-    # source_dirの中での各拡張子と一致するファイルのパスを探索
+    # find the path of the file that matches each extension in source_dir
     for ext in exts:
         for source_path in source_dir.rglob(f"*{ext}"):
-            # dest_dir内での相対パスを計算
+            # calculate relative path within dest_dir
             relative_path = source_path.relative_to(source_dir)
             dest_path = dest_dir / relative_path
 
-            # 必要に応じてコピー先ディレクトリを作成
+            # create a copy destination directory if necessary
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # ファイルをコピー
+            # copy file 
             shutil.copy2(source_path, dest_path)
             print(f"Copied {source_path} to {dest_path}")
 
@@ -35,20 +35,20 @@ def copy_files_with_exts(source_dir: Path, dest_dir: Path, exts: list):
 @click.option(
     "--extentions", "-e", type=list[str], default=["best_model.pth", ".hydra/*.yaml"]
 )
-@click.option("--user_name", "-u", default="tubotubo")
+@click.option("--user_name", "-u", default="jamieplace")
 @click.option("--new", "-n", is_flag=True)
 def main(
     title: str,
     dir: Path,
     extentions: list[str] = [".pth", ".yaml"],
-    user_name: str = "tubotubo",
+    user_name: str = "jamieplace",
     new: bool = False,
 ):
-    """extentionを指定して、dir以下のファイルをzipに圧縮し、kaggleにアップロードする。
+    """specify what extentions to compress into a zip and uppload to kaggle
 
     Args:
-        title (str): kaggleにアップロードするときのタイトル
-        dir (Path): アップロードするファイルがあるディレクトリ
+        title (str): title when uploaded to kaggle
+        dir (Path): directory with files to upload
         extentions (list[str], optional): アップロードするファイルの拡張子.
         user_name (str, optional): kaggleのユーザー名.
         new (bool, optional): 新規データセットとしてアップロードするかどうか.

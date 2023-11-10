@@ -179,6 +179,7 @@ class TrainDataset(Dataset):
         self.event_df = (
             event_df.pivot(index=["series_id", "night"], columns="event", values="step")
             .drop_nulls()
+            .filter(pl.col("series_id").is_in(self.cfg.split.train_series_ids))
             .to_pandas()
         )
         self.features = load_features(
@@ -198,6 +199,7 @@ class TrainDataset(Dataset):
                 pl.read_csv(self.event_df_path)
                 .drop_nulls()
                 .pivot(index=["series_id", "night"], columns="event", values="step")
+                .filter(pl.col("series_id").is_in(self.cfg.split.train_series_ids))
                 .drop_nulls()
             )
         return len(self.event_df)  # type: ignore

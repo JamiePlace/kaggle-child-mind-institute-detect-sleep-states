@@ -36,7 +36,7 @@ trainer:
 
 dataset:
   batch_size: 64
-  num_workers: 5
+  num_workers: 8
   offset: 10
   sigma: 10
   bg_sampling_rate: 0.5
