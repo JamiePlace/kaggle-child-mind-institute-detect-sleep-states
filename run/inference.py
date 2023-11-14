@@ -11,11 +11,10 @@ from torchvision.transforms.functional import resize
 from tqdm import tqdm
 
 from src.conf import InferenceConfig
-from src.datamodule.seg import TestDataset, load_chunk_features, nearest_valid_size
+from src.datamodule.seg import TestDataset, load_features, load_chunk_features, nearest_valid_size
 from src.models.common import get_model
 from src.utils.common import trace
 from src.utils.post_process import post_process_for_seg
-
 
 def load_model(cfg: InferenceConfig) -> nn.Module:
     num_timesteps = nearest_valid_size(
@@ -53,14 +52,14 @@ def get_test_dataloader(cfg: InferenceConfig) -> DataLoader:
     """
     feature_dir = Path(cfg.dir.processed_dir) / cfg.phase
     series_ids = [x.name for x in feature_dir.glob("*")]
-    chunk_features = load_chunk_features(
+    features = load_chunk_features(
         duration=cfg.duration,
         feature_names=cfg.features,
         series_ids=series_ids,
         processed_dir=Path(cfg.dir.processed_dir),
         phase=cfg.phase,
     )
-    test_dataset = TestDataset(cfg, chunk_features=chunk_features)
+    test_dataset = TestDataset(cfg, chunk_features=features)
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=cfg.batch_size,
@@ -135,7 +134,9 @@ def main(cfg: InferenceConfig):
             score_th=cfg.pp.score_th,
             distance=cfg.pp.distance,
         )
-    sub_df.write_csv(Path(cfg.dir.sub_dir) / "submission.csv")
+    with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
+        dir = Path(cfg.dir.sub_dir) / "submission.csv"
+        sub_df.write_csv(dir)  # type: ignore
 
 
 if __name__ == "__main__":

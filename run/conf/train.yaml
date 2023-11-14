@@ -42,9 +42,9 @@ dataset:
   bg_sampling_rate: 0.5
 
 aug:
-  mixup_prob: 0.0
+  mixup_prob: 0.1
   mixup_alpha: 0.4
-  cutmix_prob: 0.0
+  cutmix_prob: 0.1
   cutmix_alpha: 0.4
   
 # post_process
@@ -63,14 +63,14 @@ features:
   - "anglez"
   - "enmo"
   # - "step"
-  # - "month_sin"
-  # - "month_cos"
+  - "month_sin"
+  - "month_cos"
   - "hour_sin"
   - "hour_cos"
-  # - "minute_sin"
-  # - "minute_cos"
-  # - "anglez_sin"
-  # - "anglez_cos"
+  - "minute_sin"
+  - "minute_cos"
+  - "anglez_sin"
+  - "anglez_cos"
 
 # optimizer
 optimizer:

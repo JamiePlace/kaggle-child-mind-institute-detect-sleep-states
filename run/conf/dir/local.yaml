@@ -2,4 +2,4 @@ data_dir: C:/Users/jamie/projects/kaggle-child-mind-institute-detect-sleep-state
 processed_dir: C:/Users/jamie/projects/kaggle-child-mind-institute-detect-sleep-states/processed_data
 output_dir: C:/Users/jamie/projects/kaggle-child-mind-institute-detect-sleep-states/output
 model_dir: C:/Users/jamie/projects/kaggle-child-mind-institute-detect-sleep-states/output/train
-sub_dir: ./
+sub_dir: C:/Users/jamie/projects/kaggle-child-mind-institute-detect-sleep-states

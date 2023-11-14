@@ -42,7 +42,7 @@ def post_process_for_seg(
     if len(records) == 0:  # 一つも予測がない場合はdummyを入れる
         records.append(
             {
-                "series_id": series_id,
+                "series_id": series_ids[0],
                 "step": 0,
                 "event": "onset",
                 "score": 0,

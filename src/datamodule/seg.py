@@ -76,7 +76,9 @@ def random_crop(pos: int, duration: int, max_end) -> tuple[int, int]:
     """Randomly crops with duration length including pos.
     However, 0<=start, end<=max_end
     """
-    start = random.randint(max(0, pos - duration), min(pos, max_end - duration))
+    start = random.randint(
+        max(0, pos - duration), min(pos, max_end - duration)
+    )
     end = start + duration
     return start, end
 
@@ -85,7 +87,11 @@ def random_crop(pos: int, duration: int, max_end) -> tuple[int, int]:
 # Label
 ###################
 def get_label(
-    this_event_df: pd.DataFrame, num_frames: int, duration: int, start: int, end: int
+    this_event_df: pd.DataFrame,
+    num_frames: int,
+    duration: int,
+    start: int,
+    end: int,
 ) -> np.ndarray:
     # # (start, end)の範囲と(onset, wakeup)の範囲が重なるものを取得
     this_event_df = this_event_df.query("@start <= wakeup & onset <= @end")
@@ -144,6 +150,29 @@ def negative_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
 
 
 ###################
+# PRE-PROCESS TRAINING DATA FOR TRAINING
+###################
+def pre_process_for_training(
+    features_path: Path, event_df_path: Path, cfg: TrainConfig
+):
+    # load all of the features for all of the training data
+    features = load_features(
+        feature_names=cfg.features,
+        series_ids=cfg.split.train_series_ids,
+        processed_dir=features_path,
+        phase="train",
+    )
+    event_df = (
+        pl.read_csv(event_df_path)
+        .drop_nulls()
+        .pivot(index=["series_id", "night"], columns="event", values="step")
+        .drop_nulls()
+        .filter(pl.col("series_id").is_in(cfg.split.train_series_ids))
+        .to_pandas()
+    )
+
+
+###################
 # Dataset
 ###################
 def nearest_valid_size(input_size: int, downsample_rate: int) -> int:
@@ -159,6 +188,12 @@ def nearest_valid_size(input_size: int, downsample_rate: int) -> int:
     return input_size
 
 
+# TODO this method loads the features and determines the label on each pass
+# through this is too much. Have the features for training and the labels
+# determined before we get to the generation of the dataset object. This will
+# greatly improve efficiency which is the main problem at the moment.
+# look at updating to datapipes and pickling
+# https://medium.com/deelvin-machine-learning/comparison-of-pytorch-dataset-and-torchdata-datapipes-486e03068c58
 class TrainDataset(Dataset):
     def __init__(
         self,
@@ -169,63 +204,53 @@ class TrainDataset(Dataset):
         self.cfg = cfg
         self.features_path = features_path
         self.event_df_path = event_df_path
-        # both the event df and features need to be assigned on the first
-        # call to get item. this is due to memory mapping and pickling
-        # cringe....
-        self.event_df = None
-
-    def load_data(self):
-        event_df = pl.read_csv(self.event_df_path).drop_nulls()
         self.event_df = (
-            event_df.pivot(index=["series_id", "night"], columns="event", values="step")
+            pl.read_csv(self.event_df_path)
+            .drop_nulls()
+            .pivot(
+                index=["series_id", "night"], columns="event", values="step"
+            )
             .drop_nulls()
             .filter(pl.col("series_id").is_in(self.cfg.split.train_series_ids))
             .to_pandas()
         )
-        self.features = load_features(
-            feature_names=self.cfg.features,
-            series_ids=self.cfg.split.train_series_ids,
-            processed_dir=self.features_path,
-            phase="train",
-        )
         self.num_features = len(self.cfg.features)
         self.upsampled_num_frames = nearest_valid_size(
-            int(self.cfg.duration * self.cfg.upsample_rate), self.cfg.downsample_rate
+            int(self.cfg.duration * self.cfg.upsample_rate),
+            self.cfg.downsample_rate,
         )
 
     def __len__(self):
-        if self.event_df is None:
-            return len(
-                pl.read_csv(self.event_df_path)
-                .drop_nulls()
-                .pivot(index=["series_id", "night"], columns="event", values="step")
-                .filter(pl.col("series_id").is_in(self.cfg.split.train_series_ids))
-                .drop_nulls()
-            )
-        return len(self.event_df)  # type: ignore
+        return len(self.event_df)
 
     def __getitem__(self, idx):
-        if self.event_df is None:
-            self.load_data()
+        event_df = self.event_df
         event = np.random.choice(["onset", "wakeup"], p=[0.5, 0.5])
-        pos = self.event_df.at[idx, event]  # type: ignore
-        series_id = self.event_df.at[idx, "series_id"]  # type: ignore
-        this_event_df = self.event_df.query("series_id == @series_id").reset_index(  # type: ignore
+        pos = event_df.at[idx, event]
+        series_id = event_df.at[idx, "series_id"]
+        this_event_df = event_df.query("series_id == @series_id").reset_index(
             drop=True
         )
+
         # extract data matching series_id
-        this_feature = self.features[series_id]  # (n_steps, num_features)
-        n_steps = this_feature.shape[0]
+        this_feature = load_features(
+            feature_names=self.cfg.features,
+            series_ids=[series_id],
+            processed_dir=self.features_path,
+            phase="train",
+        )[series_id]
+        n_rows = this_feature.shape[0]
 
         # sample background
         if random.random() < self.cfg.dataset.bg_sampling_rate:
-            pos = negative_sampling(this_event_df, n_steps)
+            pos = negative_sampling(this_event_df, n_rows)
 
         # crop
-        start, end = random_crop(pos, self.cfg.duration, n_steps)
+        start, end = random_crop(pos, self.cfg.duration, n_rows)
         feature = this_feature[start:end]  # (duration, num_features)
 
         # upsample
+        # this is upsampling from 5 min data to 1 min data
         feature = torch.FloatTensor(feature.T).unsqueeze(
             0
         )  # (1, num_features, duration)
@@ -237,7 +262,9 @@ class TrainDataset(Dataset):
 
         # from hard label to gaussian label
         num_frames = self.upsampled_num_frames // self.cfg.downsample_rate
-        label = get_label(this_event_df, num_frames, self.cfg.duration, start, end)
+        label = get_label(
+            this_event_df, num_frames, self.cfg.duration, start, end
+        )
         label[:, [1, 2]] = gaussian_label(
             label[:, [1, 2]],
             offset=self.cfg.dataset.offset,
@@ -262,13 +289,16 @@ class ValidDataset(Dataset):
         self.chunk_features = chunk_features
         self.keys = list(chunk_features.keys())
         self.event_df = (
-            event_df.pivot(index=["series_id", "night"], columns="event", values="step")
+            event_df.pivot(
+                index=["series_id", "night"], columns="event", values="step"
+            )
             .drop_nulls()
             .to_pandas()
         )
         self.num_features = len(cfg.features)
         self.upsampled_num_frames = nearest_valid_size(
-            int(self.cfg.duration * self.cfg.upsample_rate), self.cfg.downsample_rate
+            int(self.cfg.duration * self.cfg.upsample_rate),
+            self.cfg.downsample_rate,
         )
 
     def __len__(self):
@@ -292,7 +322,9 @@ class ValidDataset(Dataset):
         end = start + self.cfg.duration
         num_frames = self.upsampled_num_frames // self.cfg.downsample_rate
         label = get_label(
-            self.event_df.query("series_id == @series_id").reset_index(drop=True),
+            self.event_df.query("series_id == @series_id").reset_index(
+                drop=True
+            ),
             num_frames,
             self.cfg.duration,
             start,
@@ -316,7 +348,8 @@ class TestDataset(Dataset):
         self.keys = list(chunk_features.keys())
         self.num_features = len(cfg.features)
         self.upsampled_num_frames = nearest_valid_size(
-            int(self.cfg.duration * self.cfg.upsample_rate), self.cfg.downsample_rate
+            int(self.cfg.duration * self.cfg.upsample_rate),
+            self.cfg.downsample_rate,
         )
 
     def __len__(self):
@@ -349,7 +382,9 @@ class SegDataModule(LightningDataModule):
         self.cfg = cfg
         self.data_dir = Path(cfg.dir.data_dir)
         self.processed_dir = Path(cfg.dir.processed_dir)
-        self.event_df = pl.read_csv(self.data_dir / "train_events.csv").drop_nulls()
+        self.event_df = pl.read_csv(
+            self.data_dir / "train_events.csv"
+        ).drop_nulls()
         self.train_event_df = self.event_df.filter(
             pl.col("series_id").is_in(self.cfg.split.train_series_ids)
         )
