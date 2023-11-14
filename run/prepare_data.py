@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from src.conf import PrepareDataConfig
 from src.utils.common import trace
+from src.datamodule.seg import pre_process_for_training
 
 SERIES_SCHEMA = {
     "series_id": pl.Utf8,

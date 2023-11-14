@@ -12,7 +12,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.functional import resize
 
-from src.conf import InferenceConfig, TrainConfig
+from src.conf import InferenceConfig, TrainConfig, PrepareDataConfig
 from src.utils.common import pad_if_needed
 
 
@@ -156,7 +156,7 @@ def negative_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
 ###################
 def pre_process_for_training(cfg: TrainConfig):
     event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
-    features_path = Path(cfg.dir.processed_dir) / "train/"
+    features_path = Path(cfg.dir.processed_dir)
     num_features = len(cfg.features)
     upsampled_num_frames = nearest_valid_size(
         int(cfg.duration * cfg.upsample_rate),
@@ -253,32 +253,13 @@ class TrainDataset(Dataset):
     def __init__(
         self,
         cfg: TrainConfig,
-        event_df_path: Path,
-        features_path: Path,
     ):
         self.cfg = cfg
-        self.features_path = features_path
-        self.event_df_path = event_df_path
-        self.event_df = (
-            pl.read_csv(self.event_df_path)
-            .drop_nulls()
-            .pivot(
-                index=["series_id", "night"], columns="event", values="step"
-            )
-            .drop_nulls()
-            .filter(pl.col("series_id").is_in(self.cfg.split.train_series_ids))
-            .to_pandas()
-        )
-        self.num_features = len(self.cfg.features)
-        self.upsampled_num_frames = nearest_valid_size(
-            int(self.cfg.duration * self.cfg.upsample_rate),
-            self.cfg.downsample_rate,
-        )
 
         self.train_data_files = [
             train_file.name
             for train_file in (Path(cfg.dir.processed_dir) / "train").glob(
-                ".pkl"
+                "*.pkl"
             )
         ]
 
@@ -429,8 +410,6 @@ class SegDataModule(LightningDataModule):
     def train_dataloader(self):
         train_dataset = TrainDataset(
             cfg=self.cfg,
-            event_df_path=self.data_dir / "train_events.csv",
-            features_path=self.processed_dir,
         )
         train_loader = DataLoader(
             train_dataset,
