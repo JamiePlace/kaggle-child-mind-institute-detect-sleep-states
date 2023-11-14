@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import torch
+from tqdm import tqdm
+import pickle
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.functional import resize
@@ -152,9 +154,14 @@ def negative_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
 ###################
 # PRE-PROCESS TRAINING DATA FOR TRAINING
 ###################
-def pre_process_for_training(
-    features_path: Path, event_df_path: Path, cfg: TrainConfig
-):
+def pre_process_for_training(cfg: TrainConfig):
+    event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
+    features_path = Path(cfg.dir.processed_dir) / "train/"
+    num_features = len(cfg.features)
+    upsampled_num_frames = nearest_valid_size(
+        int(cfg.duration * cfg.upsample_rate),
+        cfg.downsample_rate,
+    )
     # load all of the features for all of the training data
     features = load_features(
         feature_names=cfg.features,
@@ -170,6 +177,54 @@ def pre_process_for_training(
         .filter(pl.col("series_id").is_in(cfg.split.train_series_ids))
         .to_pandas()
     )
+
+    output_path = Path(cfg.dir.processed_dir) / "train/"
+    for i in tqdm(range(len(event_df))):
+        event = np.random.choice(["onset", "wakeup"], p=[0.5, 0.5])
+        pos = event_df.at[i, event]
+        series_id = event_df.at[i, "series_id"]
+        this_event_df = event_df.query("series_id == @series_id").reset_index(
+            drop=True
+        )
+        this_feature = features[series_id]
+        n_rows = this_feature.shape[0]
+        # should this be done such that there are an equal number of
+        # negative periods as positive periods?
+        # sample background
+        if random.random() < cfg.dataset.bg_sampling_rate:
+            pos = negative_sampling(this_event_df, n_rows)
+
+        # crop
+        start, end = random_crop(pos, cfg.duration, n_rows)
+        feature = this_feature[start:end]  # (duration, num_features)
+        # upsample
+        # this is upsampling from 5 min data to 1 min data
+        feature = torch.FloatTensor(feature.T).unsqueeze(
+            0
+        )  # (1, num_features, duration)
+        feature = resize(
+            feature,
+            size=[num_features, upsampled_num_frames],
+            antialias=False,
+        ).squeeze(0)
+
+        # from hard label to gaussian label
+        num_frames = upsampled_num_frames // cfg.downsample_rate
+        label = get_label(this_event_df, num_frames, cfg.duration, start, end)
+        label[:, [1, 2]] = gaussian_label(
+            label[:, [1, 2]],
+            offset=cfg.dataset.offset,
+            sigma=cfg.dataset.sigma,
+        )
+        output = {
+            "series_id": series_id,
+            "feature": feature,
+            "label": torch.FloatTensor(label),
+        }
+        file_name = f"{series_id}_{i:07}.pkl"
+        fileobj = open(output_path / file_name, "wb")
+        pickle.dump(output, fileobj)
+        fileobj.close()
 
 
 ###################
@@ -220,62 +275,25 @@ class TrainDataset(Dataset):
             self.cfg.downsample_rate,
         )
 
+        self.train_data_files = [
+            train_file.name
+            for train_file in (Path(cfg.dir.processed_dir) / "train").glob(
+                ".pkl"
+            )
+        ]
+
     def __len__(self):
-        return len(self.event_df)
+        return len(self.train_data_files)
 
     def __getitem__(self, idx):
-        event_df = self.event_df
-        event = np.random.choice(["onset", "wakeup"], p=[0.5, 0.5])
-        pos = event_df.at[idx, event]
-        series_id = event_df.at[idx, "series_id"]
-        this_event_df = event_df.query("series_id == @series_id").reset_index(
-            drop=True
-        )
+        data_path = Path(self.cfg.dir.processed_dir) / "train"
+        file_name = self.train_data_files[idx]
 
-        # extract data matching series_id
-        this_feature = load_features(
-            feature_names=self.cfg.features,
-            series_ids=[series_id],
-            processed_dir=self.features_path,
-            phase="train",
-        )[series_id]
-        n_rows = this_feature.shape[0]
+        fileobj = open(data_path / file_name, "rb")
+        output = pickle.load(fileobj)
+        fileobj.close()
 
-        # sample background
-        if random.random() < self.cfg.dataset.bg_sampling_rate:
-            pos = negative_sampling(this_event_df, n_rows)
-
-        # crop
-        start, end = random_crop(pos, self.cfg.duration, n_rows)
-        feature = this_feature[start:end]  # (duration, num_features)
-
-        # upsample
-        # this is upsampling from 5 min data to 1 min data
-        feature = torch.FloatTensor(feature.T).unsqueeze(
-            0
-        )  # (1, num_features, duration)
-        feature = resize(
-            feature,
-            size=[self.num_features, self.upsampled_num_frames],
-            antialias=False,
-        ).squeeze(0)
-
-        # from hard label to gaussian label
-        num_frames = self.upsampled_num_frames // self.cfg.downsample_rate
-        label = get_label(
-            this_event_df, num_frames, self.cfg.duration, start, end
-        )
-        label[:, [1, 2]] = gaussian_label(
-            label[:, [1, 2]],
-            offset=self.cfg.dataset.offset,
-            sigma=self.cfg.dataset.sigma,
-        )
-
-        return {
-            "series_id": series_id,
-            "feature": feature,  # (num_features, upsampled_num_frames)
-            "label": torch.FloatTensor(label),  # (pred_length, num_classes)
-        }
+        return output
 
 
 class ValidDataset(Dataset):

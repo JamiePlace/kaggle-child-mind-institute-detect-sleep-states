@@ -13,14 +13,15 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers.wandb import WandbLogger
 
 from src.conf import TrainConfig
-from src.datamodule.seg import SegDataModule
+from src.datamodule.seg import SegDataModule, pre_process_for_training
 from src.modelmodule.seg import SegModel
 
 # performance due to my class gpu
 torch.set_float32_matmul_precision("medium")
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s:%(name)s - %(message)s"
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s:%(name)s - %(message)s",
 )
 LOGGER = logging.getLogger(Path(__file__).name)
 
@@ -28,12 +29,16 @@ LOGGER = logging.getLogger(Path(__file__).name)
 @hydra.main(config_path="conf", config_name="train", version_base="1.2")
 def main(cfg: TrainConfig):
     seed_everything(cfg.seed)
-
+    pre_process_for_training(cfg=cfg)
     # init lightning model
     datamodule = SegDataModule(cfg)
     LOGGER.info("Set Up DataModule")
     model = SegModel(
-        cfg, datamodule.valid_event_df, len(cfg.features), len(cfg.labels), cfg.duration
+        cfg,
+        datamodule.valid_event_df,
+        len(cfg.features),
+        len(cfg.labels),
+        cfg.duration,
     )
 
     # set callbacks
@@ -76,6 +81,7 @@ def main(cfg: TrainConfig):
         sync_batchnorm=True,
         check_val_every_n_epoch=cfg.trainer.check_val_every_n_epoch,
     )
+
     # this doesn't work smh
     # TODO fix
     trainer.fit(model, datamodule=datamodule)
