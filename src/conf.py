@@ -114,6 +114,7 @@ class TrainConfig:
     dataset: DatasetConfig
     aug: AugmentationConfig
     pp: PostProcessConfig
+    refresh_processed_data: bool
 
 
 @dataclass
