@@ -152,7 +152,7 @@ def negative_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
 
 
 ###################
-# PRE-PROCESS TRAINING DATA FOR TRAINING
+# PRE-PROCESS TRAINING DATA FOR TRAINING AND VALIDATION
 ###################
 def pre_process_for_training(cfg: TrainConfig):
     event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
@@ -163,9 +163,10 @@ def pre_process_for_training(cfg: TrainConfig):
         cfg.downsample_rate,
     )
     # load all of the features for all of the training data
+    all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
     features = load_features(
         feature_names=cfg.features,
-        series_ids=cfg.split.train_series_ids,
+        series_ids=all_series_ids,
         processed_dir=features_path,
         phase="train",
     )
@@ -174,7 +175,6 @@ def pre_process_for_training(cfg: TrainConfig):
         .drop_nulls()
         .pivot(index=["series_id", "night"], columns="event", values="step")
         .drop_nulls()
-        .filter(pl.col("series_id").is_in(cfg.split.train_series_ids))
         .to_pandas()
     )
 
@@ -261,6 +261,7 @@ class TrainDataset(Dataset):
             for train_file in (Path(cfg.dir.processed_dir) / "train").glob(
                 "*.pkl"
             )
+            if train_file.name in cfg.split.train_series_ids
         ]
 
     def __len__(self):
@@ -281,59 +282,28 @@ class ValidDataset(Dataset):
     def __init__(
         self,
         cfg: TrainConfig,
-        chunk_features: dict[str, np.ndarray],
-        event_df: pl.DataFrame,
     ):
         self.cfg = cfg
-        self.chunk_features = chunk_features
-        self.keys = list(chunk_features.keys())
-        self.event_df = (
-            event_df.pivot(
-                index=["series_id", "night"], columns="event", values="step"
+        self.valid_data_files = [
+            valid_file.name
+            for valid_file in (Path(cfg.dir.processed_dir) / "train").glob(
+                "*.pkl"
             )
-            .drop_nulls()
-            .to_pandas()
-        )
-        self.num_features = len(cfg.features)
-        self.upsampled_num_frames = nearest_valid_size(
-            int(self.cfg.duration * self.cfg.upsample_rate),
-            self.cfg.downsample_rate,
-        )
+            if valid_file.name in cfg.split.valid_series_ids
+        ]
 
     def __len__(self):
-        return len(self.keys)
+        return len(self.valid_data_files)
 
     def __getitem__(self, idx):
-        key = self.keys[idx]
-        feature = self.chunk_features[key]
-        feature = torch.FloatTensor(feature.T).unsqueeze(
-            0
-        )  # (1, num_features, duration)
-        feature = resize(
-            feature,
-            size=[self.num_features, self.upsampled_num_frames],
-            antialias=False,
-        ).squeeze(0)
+        data_path = Path(self.cfg.dir.processed_dir) / "train"
+        file_name = self.valid_data_files[idx]
 
-        series_id, chunk_id = key.split("_")
-        chunk_id = int(chunk_id)
-        start = chunk_id * self.cfg.duration
-        end = start + self.cfg.duration
-        num_frames = self.upsampled_num_frames // self.cfg.downsample_rate
-        label = get_label(
-            self.event_df.query("series_id == @series_id").reset_index(
-                drop=True
-            ),
-            num_frames,
-            self.cfg.duration,
-            start,
-            end,
-        )
-        return {
-            "key": key,
-            "feature": feature,  # (num_features, duration)
-            "label": torch.FloatTensor(label),  # (duration, num_classes)
-        }
+        fileobj = open(data_path / file_name, "rb")
+        output = pickle.load(fileobj)
+        fileobj.close()
+
+        return output
 
 
 class TestDataset(Dataset):
@@ -422,11 +392,7 @@ class SegDataModule(LightningDataModule):
         return train_loader
 
     def val_dataloader(self):
-        valid_dataset = ValidDataset(
-            cfg=self.cfg,
-            chunk_features=self.valid_chunk_features,
-            event_df=self.valid_event_df,
-        )
+        valid_dataset = ValidDataset(cfg=self.cfg)
         valid_loader = DataLoader(
             valid_dataset,
             batch_size=self.cfg.dataset.batch_size,
