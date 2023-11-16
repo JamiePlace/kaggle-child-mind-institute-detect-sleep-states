@@ -61,7 +61,9 @@ class SegModel(LightningModule):
             do_mixup = False
             do_cutmix = False
 
-        output = self.model(batch["feature"], batch["label"], do_mixup, do_cutmix)
+        output = self.model(
+            batch["feature"], batch["label"], do_mixup, do_cutmix
+        )
         loss: torch.Tensor = output["loss"]
         logits = output["logits"]  # (batch_size, n_timesteps, n_classes)
 
@@ -85,9 +87,10 @@ class SegModel(LightningModule):
                 size=[self.duration, logits.shape[2]],
                 antialias=False,
             )
+            # TODO fix this
             self.validation_step_outputs.append(
                 (
-                    batch["key"],
+                    batch["series_id"],
                     resized_labels.numpy(),
                     resized_logits.numpy(),
                     loss.detach().item(),
@@ -123,7 +126,12 @@ class SegModel(LightningModule):
             self.val_event_df.to_pandas(), val_pred_df.to_pandas()
         )
         self.log(
-            "val_score", score, on_step=False, on_epoch=True, logger=True, prog_bar=True
+            "val_score",
+            score,
+            on_step=False,
+            on_epoch=True,
+            logger=True,
+            prog_bar=True,
         )
 
         if loss < self.__best_loss:

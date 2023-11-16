@@ -261,7 +261,7 @@ class TrainDataset(Dataset):
             for train_file in (Path(cfg.dir.processed_dir) / "train").glob(
                 "*.pkl"
             )
-            if train_file.name in cfg.split.train_series_ids
+            if train_file.name.split("_")[0] in cfg.split.train_series_ids
         ]
 
     def __len__(self):
@@ -289,7 +289,7 @@ class ValidDataset(Dataset):
             for valid_file in (Path(cfg.dir.processed_dir) / "train").glob(
                 "*.pkl"
             )
-            if valid_file.name in cfg.split.valid_series_ids
+            if valid_file.name.split("_")[0] in cfg.split.valid_series_ids
         ]
 
     def __len__(self):
