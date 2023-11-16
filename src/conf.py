@@ -93,6 +93,8 @@ class PrepareDataConfig:
     dir: DirConfig
     phase: str
     stacked_lookback: int
+    stacked_count: int
+    stack_cols: list[str]
 
 
 @dataclass

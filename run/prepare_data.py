@@ -66,13 +66,40 @@ def add_feature(series_df: pl.DataFrame) -> pl.DataFrame:
     return series_df
 
 
+def stack_features(
+    feature: np.ndarray, stacked_lookback: int, stacked_count: int
+) -> np.ndarray:
+    stacked_array = np.zeros(
+        (len(feature) + (stacked_lookback * stacked_count), stacked_count)
+    )
+
+    for stack in range(stacked_count):
+        stacked_array[
+            (stacked_lookback * stack) : len(feature)
+            + (stacked_lookback * stack),
+            stack,
+        ] = feature
+
+    # remove the bullshit 0s at the end
+    stacked_array = stacked_array[0 : len(feature), :]
+    return stacked_array
+
+
 def save_each_series(
-    this_series_df: pl.DataFrame, columns: list[str], output_dir: Path
+    this_series_df: pl.DataFrame,
+    columns: list[str],
+    output_dir: Path,
+    cfg: PrepareDataConfig,
 ):
+    stacked_lookback = cfg.stacked_lookback
+    stacked_count = cfg.stacked_count
+    stack_cols = cfg.stack_cols
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for col_name in columns:
         x = this_series_df.get_column(col_name).to_numpy(zero_copy_only=True)
+        if stacked_lookback > 0 and col_name in stack_cols:
+            x = stack_features(x, stacked_lookback, stacked_count)
         np.save(output_dir / f"{col_name}.npy", x)
 
 
@@ -127,7 +154,7 @@ def main(cfg: PrepareDataConfig):
             this_series_df = add_feature(this_series_df)
 
             series_dir = processed_dir / series_id  # type: ignore
-            save_each_series(this_series_df, FEATURE_NAMES, series_dir)
+            save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
 
 
 if __name__ == "__main__":
