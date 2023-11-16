@@ -19,12 +19,12 @@ stacked_count: 5
 stack_cols: [
   "anglez",
   "enmo",
-  "anglez_sin"
-  "anglez_cos"
-  "hour_sin"
-  "hour_sin"
-  "month_sin"
-  "month_cos"
-  "minute_cos"
-  "minute_cos"
+  "anglez_sin",
+  "anglez_cos",
+  "hour_sin",
+  "hour_sin",
+  "month_sin",
+  "month_cos",
+  "minute_cos",
+  "minute_cos",
 ]
