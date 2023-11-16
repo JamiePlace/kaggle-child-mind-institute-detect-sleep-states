@@ -92,6 +92,7 @@ class WeightConfig:
 class PrepareDataConfig:
     dir: DirConfig
     phase: str
+    stacked_lookback: int
 
 
 @dataclass

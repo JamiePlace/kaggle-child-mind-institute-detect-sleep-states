@@ -14,3 +14,4 @@ defaults:
   - dir: local
 
 phase: train
+stacked_lookback: 0
