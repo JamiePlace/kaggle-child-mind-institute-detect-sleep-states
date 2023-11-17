@@ -22,9 +22,9 @@ stack_cols:
   - "anglez_sin"
   - "anglez_cos"
   - "hour_sin"
-  - "hour_sin"
+  - "hour_cos"
   - "month_sin"
   - "month_cos"
   - "minute_cos"
-  - "minute_cos"
+  - "minute_sin"
 

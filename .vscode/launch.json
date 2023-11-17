@@ -36,7 +36,8 @@
                 "dataset.num_workers=1",
                 "model=Spec2DCNN",
                 "trainer.check_val_every_n_epoch=1",
-                "trainer.debug=false"
+                "trainer.debug=false",
+                "refresh_processed_data=true",
 
             ]
         },
