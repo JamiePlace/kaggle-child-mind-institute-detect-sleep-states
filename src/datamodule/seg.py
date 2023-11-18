@@ -163,7 +163,8 @@ def pre_process_for_training(cfg: TrainConfig):
         cfg.downsample_rate,
     )
     # load all of the features for all of the training data
-    all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    all_series_ids = cfg.split.train_series_ids
     features = load_features(
         feature_names=cfg.features,
         series_ids=all_series_ids,
@@ -174,6 +175,7 @@ def pre_process_for_training(cfg: TrainConfig):
         pl.read_csv(event_df_path)
         .drop_nulls()
         .pivot(index=["series_id", "night"], columns="event", values="step")
+        .filter(pl.col("series_id").is_in(cfg.split.train_series_ids))
         .drop_nulls()
         .to_pandas()
     )
@@ -220,6 +222,68 @@ def pre_process_for_training(cfg: TrainConfig):
             "series_id": series_id,
             "feature": feature,
             "label": torch.FloatTensor(label),
+        }
+        file_name = f"{series_id}_{i:07}.pkl"
+        fileobj = open(output_path / file_name, "wb")
+        pickle.dump(output, fileobj)
+        fileobj.close()
+
+
+def pre_process_for_validation(cfg: TrainConfig):
+    event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
+    features_path = Path(cfg.dir.processed_dir)
+    num_features = len(cfg.features)
+    upsampled_num_frames = nearest_valid_size(
+        int(cfg.duration * cfg.upsample_rate),
+        cfg.downsample_rate,
+    )
+    # load all of the features for all of the training data
+    # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    features = load_chunk_features(
+        duration=cfg.duration,
+        feature_names=cfg.features,
+        series_ids=cfg.split.valid_series_ids,
+        processed_dir=features_path,
+        phase="train",
+    )
+    event_df = (
+        pl.read_csv(event_df_path)
+        .drop_nulls()
+        .pivot(index=["series_id", "night"], columns="event", values="step")
+        .filter(pl.col("series_id").is_in(cfg.split.valid_series_ids))
+        .drop_nulls()
+        .to_pandas()
+    )
+
+    keys = features.keys()
+    output_path = Path(cfg.dir.processed_dir) / "train/"
+    for i, key in tqdm(enumerate(keys)):
+        feature = features[key]
+        feature = torch.FloatTensor(feature.T).unsqueeze(
+            0
+        )  # (1, num_features, duration)
+        feature = resize(
+            feature,
+            size=[num_features, upsampled_num_frames],
+            antialias=False,
+        ).squeeze(0)
+
+        series_id, chunk_id = key.split("_")
+        chunk_id = int(chunk_id)
+        start = chunk_id * cfg.duration
+        end = start + cfg.duration
+        num_frames = upsampled_num_frames // cfg.downsample_rate
+        label = get_label(
+            event_df.query("series_id == @series_id").reset_index(drop=True),
+            num_frames,
+            cfg.duration,
+            start,
+            end,
+        )
+        output = {
+            "key": key,
+            "feature": feature,  # (num_features, duration)
+            "label": torch.FloatTensor(label),  # (duration, num_classes)
         }
         file_name = f"{series_id}_{i:07}.pkl"
         fileobj = open(output_path / file_name, "wb")
@@ -372,6 +436,7 @@ class SegDataModule(LightningDataModule):
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
             drop_last=True,
+            persistent_workers=True,
         )
         return train_loader
 
@@ -383,5 +448,6 @@ class SegDataModule(LightningDataModule):
             shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
+            persistent_workers=True,
         )
         return valid_loader
