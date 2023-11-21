@@ -4,7 +4,10 @@ from scipy.signal import find_peaks
 
 
 def post_process_for_seg(
-    keys: list[str], preds: np.ndarray, score_th: float = 0.01, distance: int = 5000
+    keys: list[str],
+    preds: np.ndarray,
+    score_th: float = 0.01,
+    distance: int = 5000,
 ) -> pl.DataFrame:
     """make submission dataframe for segmentation task
 
@@ -26,7 +29,10 @@ def post_process_for_seg(
 
         for i, event_name in enumerate(["onset", "wakeup"]):
             this_event_preds = this_series_preds[:, i]
-            steps = find_peaks(this_event_preds, height=score_th, distance=distance)[0]
+            # we need to write our own version of this
+            steps = find_peaks(
+                this_event_preds, height=score_th, distance=distance
+            )[0]
             scores = this_event_preds[steps]
 
             for step, score in zip(steps, scores):

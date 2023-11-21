@@ -10,11 +10,16 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     RichModelSummary,
     RichProgressBar,
+    EarlyStopping,
 )
 from pytorch_lightning.loggers.wandb import WandbLogger
 
 from src.conf import TrainConfig
-from src.datamodule.seg import SegDataModule, pre_process_for_training
+from src.datamodule.seg import (
+    SegDataModule,
+    pre_process_for_training,
+    pre_process_for_validation,
+)
 from src.modelmodule.seg import SegModel
 
 # performance due to my class gpu
@@ -41,8 +46,10 @@ def main(cfg: TrainConfig):
             for file in train_data_files:
                 os.remove(Path(cfg.dir.processed_dir) / "train" / file)
 
-        LOGGER.info("Processing Data for Loading")
+        LOGGER.info("Processing Data for Training")
         pre_process_for_training(cfg)
+        LOGGER.info("Processing Data for Validation")
+        pre_process_for_validation(cfg)
 
     seed_everything(cfg.seed)
     # init lightning model
@@ -65,6 +72,13 @@ def main(cfg: TrainConfig):
         save_last=False,
     )
     lr_monitor = LearningRateMonitor("epoch")
+    early_stop_callback = EarlyStopping(
+        monitor=cfg.trainer.monitor,
+        min_delta=0.00,
+        patience=cfg.trainer.early_stopping_patience,
+        verbose=False,
+        mode=cfg.trainer.monitor_mode,
+    )
     progress_bar = RichProgressBar()
     model_summary = RichModelSummary(max_depth=2)
 
@@ -88,7 +102,12 @@ def main(cfg: TrainConfig):
         max_steps=cfg.trainer.epochs * len(datamodule.train_dataloader()),
         gradient_clip_val=cfg.trainer.gradient_clip_val,
         accumulate_grad_batches=cfg.trainer.accumulate_grad_batches,
-        callbacks=[checkpoint_cb, lr_monitor, progress_bar, model_summary],
+        callbacks=[
+            checkpoint_cb,
+            lr_monitor,
+            progress_bar,
+            model_summary,
+        ],
         logger=pl_logger,
         # resume_from_checkpoint=resume_from,
         num_sanity_val_steps=0,

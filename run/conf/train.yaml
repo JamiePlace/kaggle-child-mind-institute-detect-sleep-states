@@ -34,49 +34,53 @@ trainer:
   monitor: val_loss
   monitor_mode: min
   check_val_every_n_epoch: 1
+  early_stopping_patience: 5
 
 dataset:
   batch_size: 64
-  num_workers: 8
+  num_workers: 5
   offset: 10
   sigma: 10
   bg_sampling_rate: 0.5
 
 aug:
-  mixup_prob: 0.1
+  mixup_prob: 0.0
   mixup_alpha: 0.4
-  cutmix_prob: 0.1
+  cutmix_prob: 0.0
   cutmix_alpha: 0.4
   
 # post_process
 pp:
-  score_th: 0.005
-  distance: 40
+  score_th: 0.02
+  distance: 10
 
 # label
 labels:
   - "awake"
   - "event_onset"
   - "event_wakeup"
+  - "sleep"
 
 # feature
 features:
   - "anglez"
   - "enmo"
   # - "step"
-  - "month_sin"
-  - "month_cos"
+  #- "month_sin"
+  #- "month_cos"
   - "hour_sin"
   - "hour_cos"
-  - "minute_sin"
-  - "minute_cos"
+  #- "minute_sin"
+  #- "minute_cos"
   - "anglez_sin"
   - "anglez_cos"
 
 # optimizer
 optimizer:
-  lr: 0.0005
+  lr: 5e-6
 
 # scheduler
 scheduler:
   num_warmup_steps: 0
+  num_cycles: 0.5
+  power: 1

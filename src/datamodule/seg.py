@@ -95,11 +95,10 @@ def get_label(
     start: int,
     end: int,
 ) -> np.ndarray:
-    # # (start, end)の範囲と(onset, wakeup)の範囲が重なるものを取得
     this_event_df = this_event_df.query("@start <= wakeup & onset <= @end")
 
-    label = np.zeros((num_frames, 3))
-    # onset, wakeup, sleepのラベルを作成
+    label = np.zeros((num_frames, 4))
+    # onset, wakeup, sleep, awake
     for onset, wakeup in this_event_df[["onset", "wakeup"]].to_numpy():
         onset = int((onset - start) / duration * num_frames)
         wakeup = int((wakeup - start) / duration * num_frames)
@@ -111,6 +110,10 @@ def get_label(
         onset = max(0, onset)
         wakeup = min(num_frames, wakeup)
         label[onset:wakeup, 0] = 1  # sleep
+
+    # awake mask
+    mask = (label[:, 0] == 0) & (label[:, 1] == 0) & (label[:, 2] == 0)
+    label[mask, 3] = 1
 
     return label
 
@@ -133,22 +136,25 @@ def gaussian_label(label: np.ndarray, offset: int, sigma: int) -> np.ndarray:
     return label
 
 
-def negative_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
-    """negative sampling
-
-    Args:
-        this_event_df (pd.DataFrame): event df
-        num_steps (int): number of steps in this series
-
-    Returns:
-        int: negative sample position
-    """
-    # onsetとwakupを除いた範囲からランダムにサンプリング
-    positive_positions = set(
-        this_event_df[["onset", "wakeup"]].to_numpy().flatten().tolist()
+def negative_wake_sampling(this_event_df: pd.DataFrame, num_steps: int) -> int:
+    event_and_sleep_positions = []
+    positive_positions = this_event_df[["onset", "wakeup"]].to_numpy()
+    for onset, wakeup in positive_positions:
+        event_and_sleep_positions.extend(range(onset, wakeup + 1))
+    negative_positions = list(
+        set(range(num_steps)) - set(event_and_sleep_positions)
     )
-    negative_positions = list(set(range(num_steps)) - positive_positions)
     return random.sample(negative_positions, 1)[0]
+
+
+def negative_sleep_sampling(
+    this_event_df: pd.DataFrame, num_steps: int
+) -> int:
+    sleep_positions = []
+    positive_positions = this_event_df[["onset", "wakeup"]].to_numpy()
+    for onset, wakeup in positive_positions:
+        sleep_positions.extend(range(onset + 1, wakeup))
+    return random.sample(sleep_positions, 1)[0]
 
 
 ###################
@@ -181,52 +187,74 @@ def pre_process_for_training(cfg: TrainConfig):
     )
 
     output_path = Path(cfg.dir.processed_dir) / "train/"
+    # this needs to be altered such that there is an equal number of onset,
+    # wakeup and awake events
     for i in tqdm(range(len(event_df))):
-        event = np.random.choice(["onset", "wakeup"], p=[0.5, 0.5])
-        pos = event_df.at[i, event]
-        series_id = event_df.at[i, "series_id"]
-        this_event_df = event_df.query("series_id == @series_id").reset_index(
-            drop=True
-        )
-        this_feature = features[series_id]
-        n_rows = this_feature.shape[0]
-        # should this be done such that there are an equal number of
-        # negative periods as positive periods?
-        # sample background
-        if random.random() < cfg.dataset.bg_sampling_rate:
-            pos = negative_sampling(this_event_df, n_rows)
+        events = [
+            "onset",
+            "onset",
+            "onset",
+            "wakeup",
+            "wakeup",
+            "wakeup",
+            "negative",
+        ]
+        for j, event in enumerate(events):
+            series_id = event_df.at[i, "series_id"]
+            this_event_df = event_df.query(
+                "series_id == @series_id"
+            ).reset_index(drop=True)
+            this_feature = features[series_id]
+            n_rows = this_feature.shape[0]
+            # we need a method of sampling negative waking periods
+            # and negative sleep periods
+            # this will generate 4 labels
+            # awake, sleep, onset, wakeup
+            # this will crack the code
+            # pos is all we need, get it right, don't fuck it up
+            if event == "negative":
+                neg_event = np.random.choice(
+                    ["neg_sleep", "neg_wake"], p=[0.5, 0.5]
+                )
+                if neg_event == "neg_sleep":
+                    pos = negative_sleep_sampling(this_event_df, n_rows)
+                if neg_event == "neg_wake":
+                    pos = negative_wake_sampling(this_event_df, n_rows)
+            else:
+                pos = event_df.at[i, event]
+            # crop
+            start, end = random_crop(pos, cfg.duration, n_rows)  # type: ignore
+            feature = this_feature[start:end]  # (duration, num_features)
+            # upsample
+            # this is upsampling from 5 min data to 1 min data
+            feature = torch.FloatTensor(feature.T).unsqueeze(
+                0
+            )  # (1, num_features, duration)
+            feature = resize(
+                feature,
+                size=[num_features, upsampled_num_frames],
+                antialias=False,
+            ).squeeze(0)
 
-        # crop
-        start, end = random_crop(pos, cfg.duration, n_rows)
-        feature = this_feature[start:end]  # (duration, num_features)
-        # upsample
-        # this is upsampling from 5 min data to 1 min data
-        feature = torch.FloatTensor(feature.T).unsqueeze(
-            0
-        )  # (1, num_features, duration)
-        feature = resize(
-            feature,
-            size=[num_features, upsampled_num_frames],
-            antialias=False,
-        ).squeeze(0)
-
-        # from hard label to gaussian label
-        num_frames = upsampled_num_frames // cfg.downsample_rate
-        label = get_label(this_event_df, num_frames, cfg.duration, start, end)
-        label[:, [1, 2]] = gaussian_label(
-            label[:, [1, 2]],
-            offset=cfg.dataset.offset,
-            sigma=cfg.dataset.sigma,
-        )
-        output = {
-            "series_id": series_id,
-            "feature": feature,
-            "label": torch.FloatTensor(label),
-        }
-        file_name = f"{series_id}_{i:07}.pkl"
-        fileobj = open(output_path / file_name, "wb")
-        pickle.dump(output, fileobj)
-        fileobj.close()
+            # from hard label to gaussian label
+            num_frames = upsampled_num_frames // cfg.downsample_rate
+            label = get_label(
+                this_event_df, num_frames, cfg.duration, start, end
+            )
+            label[:, [1, 2]] = gaussian_label(
+                label[:, [1, 2]],
+                offset=cfg.dataset.offset,
+                sigma=cfg.dataset.sigma,
+            )
+            output = {
+                "series_id": series_id,
+                "feature": feature,
+                "label": torch.FloatTensor(label),
+            }
+            file_name = f"{series_id}_{event}_{j:03}_{i:07}.pkl"
+            fileobj = open(output_path / file_name, "wb")
+            pickle.dump(output, fileobj)
+            fileobj.close()
 
 
 def pre_process_for_validation(cfg: TrainConfig):

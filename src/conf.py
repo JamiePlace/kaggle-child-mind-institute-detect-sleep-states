@@ -47,6 +47,7 @@ class TrainerConfig:
     monitor: str
     monitor_mode: str
     check_val_every_n_epoch: int
+    early_stopping_patience: int
 
 
 @dataclass
@@ -80,6 +81,8 @@ class OptimizerConfig:
 @dataclass
 class SchedulerConfig:
     num_warmup_steps: int
+    num_cycles: int
+    power: int
 
 
 @dataclass

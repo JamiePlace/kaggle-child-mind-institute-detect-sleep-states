@@ -6,7 +6,10 @@ import torch
 import torch.optim as optim
 from pytorch_lightning import LightningModule
 from torchvision.transforms.functional import resize
-from transformers import get_cosine_schedule_with_warmup
+from transformers import (
+    get_cosine_schedule_with_warmup,
+    get_polynomial_decay_schedule_with_warmup,
+)
 
 from src.conf import TrainConfig
 from src.datamodule.seg import nearest_valid_size
@@ -87,10 +90,9 @@ class SegModel(LightningModule):
                 size=[self.duration, logits.shape[2]],
                 antialias=False,
             )
-            # TODO fix this
             self.validation_step_outputs.append(
                 (
-                    batch["series_id"],
+                    batch["key"],
                     resized_labels.numpy(),
                     resized_logits.numpy(),
                     loss.detach().item(),
@@ -147,9 +149,16 @@ class SegModel(LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
-        scheduler = get_cosine_schedule_with_warmup(
+        scheduler = get_polynomial_decay_schedule_with_warmup(
             optimizer,
-            num_training_steps=self.trainer.max_steps,
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
+            num_training_steps=self.trainer.max_steps,
+            power=self.cfg.scheduler.power,
         )
+        # scheduler = get_cosine_schedule_with_warmup(
+        #    optimizer,
+        #    num_training_steps=self.trainer.max_steps,
+        #    num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
+        #    num_cycles=self.cfg.scheduler.num_cycles,
+        # )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
