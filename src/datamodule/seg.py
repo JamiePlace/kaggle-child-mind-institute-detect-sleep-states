@@ -190,15 +190,17 @@ def pre_process_for_training(cfg: TrainConfig):
     # this needs to be altered such that there is an equal number of onset,
     # wakeup and awake events
     for i in tqdm(range(len(event_df))):
-        events = [
-            "onset",
-            "onset",
-            "onset",
-            "wakeup",
-            "wakeup",
-            "wakeup",
-            "negative",
-        ]
+        pos_neg_events = np.random.choice(
+            ["pos", "neg"],
+            p=[
+                cfg.dataset.positive_to_negative_ratio,
+                1 - cfg.dataset.positive_to_negative_ratio,
+            ],
+        )
+        if pos_neg_events == "pos":
+            events = ["onset", "wakeup"]
+        else:
+            events = ["negative"]
         for j, event in enumerate(events):
             series_id = event_df.at[i, "series_id"]
             this_event_df = event_df.query(

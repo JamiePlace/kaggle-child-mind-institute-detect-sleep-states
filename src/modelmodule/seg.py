@@ -42,6 +42,8 @@ class SegModel(LightningModule):
         self.duration = duration
         self.validation_step_outputs: list = []
         self.__best_loss = np.inf
+        self.val_loss_non_improvement = 0
+        self.best_state_dict: dict = {}
 
     def forward(
         self, x: torch.Tensor, labels: Optional[torch.Tensor] = None
@@ -124,6 +126,8 @@ class SegModel(LightningModule):
             score_th=self.cfg.pp.score_th,
             distance=self.cfg.pp.distance,
         )
+        # this is slow as all holy hell
+        # TODO make quicker loser
         score = event_detection_ap(
             self.val_event_df.to_pandas(), val_pred_df.to_pandas()
         )
@@ -144,6 +148,17 @@ class SegModel(LightningModule):
             torch.save(self.model.state_dict(), "best_model.pth")
             print(f"Saved best model {self.__best_loss} -> {loss}")
             self.__best_loss = loss
+            self.val_loss_non_improvement = 0
+        else:
+            self.val_loss_non_improvement += 1
+
+        if (
+            self.val_loss_non_improvement
+            > self.cfg.trainer.early_stopping_patience
+        ):
+            print("Loading Previously Saved Best Model")
+            self.model.load_state_dict(torch.load("best_model.pth"))
+            self.val_loss_non_improvement = 0
 
         self.validation_step_outputs.clear()
 
@@ -155,10 +170,4 @@ class SegModel(LightningModule):
             num_training_steps=self.trainer.max_steps,
             power=self.cfg.scheduler.power,
         )
-        # scheduler = get_cosine_schedule_with_warmup(
-        #    optimizer,
-        #    num_training_steps=self.trainer.max_steps,
-        #    num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
-        #    num_cycles=self.cfg.scheduler.num_cycles,
-        # )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]

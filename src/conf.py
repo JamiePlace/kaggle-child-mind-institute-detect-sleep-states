@@ -57,6 +57,7 @@ class DatasetConfig:
     offset: int
     sigma: int
     bg_sampling_rate: float
+    positive_to_negative_ratio: float
 
 
 @dataclass
