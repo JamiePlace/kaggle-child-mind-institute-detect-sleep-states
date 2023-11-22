@@ -76,9 +76,76 @@ class CNNSpectrogram(nn.Module):
         out: list[torch.Tensor] = []
         for i in range(self.out_chans):
             out.append(self.spec_conv[i](x))
-        img = torch.stack(out, dim=1)  # (batch_size, out_chans, height, time_steps)
+        img = torch.stack(
+            out, dim=1
+        )  # (batch_size, out_chans, height, time_steps)
         if self.out_size is not None:
             img = self.pool(img)  # (batch_size, out_chans, height, out_size)
         if self.sigmoid:
             img = img.sigmoid()
         return img
+
+
+class CNNextractor(nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        base_filters: int = 128,
+    ):
+        super().__init__()
+        self.conv_left = nn.ModuleList()
+        self.conv_right = nn.ModuleList()
+        conv_small_dilation = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=base_filters,
+            kernel_size=5,
+            stride=1,
+            dilation=1,
+        )
+        conv_large_dilation = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=base_filters,
+            kernel_size=5,
+            stride=1,
+            dilation=4,
+        )
+        layers_left = [
+            conv_small_dilation,
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout(p=0.5),
+            conv_small_dilation,
+            conv_small_dilation,
+            conv_small_dilation,
+        ]
+        layers_right = [
+            conv_large_dilation,
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout(p=0.5),
+            conv_large_dilation,
+            conv_large_dilation,
+            conv_large_dilation,
+        ]
+        for layer in layers_left:
+            self.conv_left.append(layer)
+        for layer in layers_right:
+            self.conv_right.append(layer)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass of the model.
+
+        Args:
+            x torch.Tensor: (batch_size, window_size, n_features)
+
+        Returns:
+            _type_: (batch_size, out_chans, height, time_steps)
+        """
+        out: torch.Tensor
+        out_left: torch.Tensor = x
+        out_right: torch.Tensor = x
+        for layer in self.conv_left:
+            out_left = layer(out_left)
+        for layer in self.conv_right:
+            out_right = layer(out_right)
+
+        out = torch.concatenate([out_left, out_right])
+        return torch.flatten(out)
