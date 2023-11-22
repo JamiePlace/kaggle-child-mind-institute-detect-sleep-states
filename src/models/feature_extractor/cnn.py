@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -89,63 +89,98 @@ class CNNSpectrogram(nn.Module):
 class CNNextractor(nn.Module):
     def __init__(
         self,
-        in_channels: int = 3,
+        in_channels: int = 1,
         base_filters: int = 128,
     ):
         super().__init__()
         self.conv_left = nn.ModuleList()
         self.conv_right = nn.ModuleList()
-        conv_small_dilation = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=base_filters,
-            kernel_size=5,
-            stride=1,
-            dilation=1,
-        )
-        conv_large_dilation = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=base_filters,
-            kernel_size=5,
-            stride=1,
-            dilation=4,
-        )
+        dropout = 0.5
+        dilation_left = 1
+        dilation_right = 4
         layers_left = [
-            conv_small_dilation,
+            nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=1,
+            ),
             nn.MaxPool2d(kernel_size=2),
-            nn.Dropout(p=0.5),
-            conv_small_dilation,
-            conv_small_dilation,
-            conv_small_dilation,
+            nn.Dropout(p=dropout),
+            nn.Conv1d(
+                in_channels=int(base_filters * dropout),
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_left,
+            ),
+            nn.Conv1d(
+                in_channels=base_filters,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_left,
+            ),
+            nn.Conv1d(
+                in_channels=base_filters,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_left,
+            ),
         ]
         layers_right = [
-            conv_large_dilation,
+            nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_right,
+            ),
             nn.MaxPool2d(kernel_size=2),
             nn.Dropout(p=0.5),
-            conv_large_dilation,
-            conv_large_dilation,
-            conv_large_dilation,
+            nn.Conv1d(
+                in_channels=int(base_filters * dropout),
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_right,
+            ),
+            nn.Conv1d(
+                in_channels=base_filters,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_right,
+            ),
+            nn.Conv1d(
+                in_channels=base_filters,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=dilation_right,
+            ),
         ]
         for layer in layers_left:
             self.conv_left.append(layer)
         for layer in layers_right:
             self.conv_right.append(layer)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass of the model.
 
         Args:
             x torch.Tensor: (batch_size, window_size, n_features)
 
         Returns:
-            _type_: (batch_size, out_chans, height, time_steps)
+            Tuple[Tensor, Tensor]: (some number), (batch_size, base_filters, some number)
         """
         out: torch.Tensor
         out_left: torch.Tensor = x
         out_right: torch.Tensor = x
-        for layer in self.conv_left:
-            out_left = layer(out_left)
-        for layer in self.conv_right:
-            out_right = layer(out_right)
-
-        out = torch.concatenate([out_left, out_right])
-        return torch.flatten(out)
+        for i in range(len(self.conv_left)):
+            out_left = self.conv_left[i](out_left)
+            out_right = self.conv_right[i](out_right)
+        out = torch.cat([out_left, out_right], dim=2)
+        return torch.flatten(out), out
