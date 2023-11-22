@@ -128,6 +128,9 @@ class SegModel(LightningModule):
         )
         # this is slow as all holy hell
         # TODO make quicker loser
+        # this is slow when we make too many positive predictions
+        # shall I bother fixing this? probably not
+        # a good model should not make too many positive predictions
         score = event_detection_ap(
             self.val_event_df.to_pandas(), val_pred_df.to_pandas()
         )

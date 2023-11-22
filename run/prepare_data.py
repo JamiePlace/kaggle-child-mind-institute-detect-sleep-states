@@ -66,6 +66,25 @@ def add_feature(series_df: pl.DataFrame) -> pl.DataFrame:
     return series_df
 
 
+def truncate_features(
+    cfg: PrepareDataConfig, features: pl.DataFrame, series_id: str
+) -> pl.DataFrame:
+    # load event df
+    event_df = (
+        pl.read_csv(Path(cfg.dir.data_dir) / "train_events.csv")
+        .drop_nulls()
+        .pivot(index=["series_id", "night"], columns="event", values="step")
+        .filter(pl.col("series_id") == series_id)
+        .drop_nulls()
+    )
+    # find the step value of the last wakeup event
+    last_wakeup_step = event_df.get_column("wakeup").max()
+    # truncate features
+    if last_wakeup_step is not None:
+        features = features.filter(pl.col("step") <= last_wakeup_step)
+    return features
+
+
 def stack_features(
     feature: np.ndarray, stacked_lookback: int, stacked_count: int
 ) -> np.ndarray:
@@ -152,6 +171,9 @@ def main(cfg: PrepareDataConfig):
             series_df.group_by("series_id"), total=n_unique
         ):
             this_series_df = add_feature(this_series_df)
+            this_series_df = truncate_features(
+                cfg, this_series_df, str(series_id)
+            )
 
             series_dir = processed_dir / series_id  # type: ignore
             save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
