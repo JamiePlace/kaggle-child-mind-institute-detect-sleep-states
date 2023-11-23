@@ -4,7 +4,7 @@ import polars as pl
 import numpy as np
 from tqdm import tqdm
 import pickle
-
+from torch.utils.data import DataLoader, Dataset
 from src.conf import TrainConfig
 
 
@@ -124,3 +124,60 @@ def pre_process_for_training(cfg: TrainConfig):
                 fileobj,
             )
             fileobj.close()
+
+
+class TrainDataset(Dataset):
+    def __init__(
+        self,
+        cfg: TrainConfig,
+    ):
+        self.cfg = cfg
+
+        self.train_data_files = [
+            train_file.name
+            for train_file in (Path(cfg.dir.processed_dir) / "train").glob(
+                "*.pkl"
+            )
+            if train_file.name.split("_")[0] in cfg.split.train_series_ids
+        ]
+
+    def __len__(self):
+        return len(self.train_data_files)
+
+    def __getitem__(self, idx):
+        data_path = Path(self.cfg.dir.processed_dir) / "train"
+        file_name = self.train_data_files[idx]
+
+        fileobj = open(data_path / file_name, "rb")
+        output = pickle.load(fileobj)
+        fileobj.close()
+
+        return output
+
+
+class ValidDataset(Dataset):
+    def __init__(
+        self,
+        cfg: TrainConfig,
+    ):
+        self.cfg = cfg
+        self.valid_data_files = [
+            valid_file.name
+            for valid_file in (Path(cfg.dir.processed_dir) / "train").glob(
+                "*.pkl"
+            )
+            if valid_file.name.split("_")[0] in cfg.split.valid_series_ids
+        ]
+
+    def __len__(self):
+        return len(self.valid_data_files)
+
+    def __getitem__(self, idx):
+        data_path = Path(self.cfg.dir.processed_dir) / "train"
+        file_name = self.valid_data_files[idx]
+
+        fileobj = open(data_path / file_name, "rb")
+        output = pickle.load(fileobj)
+        fileobj.close()
+
+        return output

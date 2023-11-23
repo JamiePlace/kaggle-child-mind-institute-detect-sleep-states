@@ -5,15 +5,11 @@ import polars as pl
 import torch
 import torch.optim as optim
 from pytorch_lightning import LightningModule
-from torchvision.transforms.functional import resize
 from transformers import (
-    get_cosine_schedule_with_warmup,
     get_polynomial_decay_schedule_with_warmup,
 )
 
 from src.conf import TrainConfig
-from src.datamodule.seg import nearest_valid_size
-from src.models.common import get_model
 from src.utils.metrics import event_detection_ap
 from src.utils.post_process import post_process_for_seg
 from src.models.prectimemodel import PrecTimeModel
@@ -34,6 +30,7 @@ class PrecTime(LightningModule):
             in_channels=feature_dim, n_classes=num_classes
         )
         self.__best_loss = np.inf
+        self.validation_loss = []
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
 
@@ -50,8 +47,8 @@ class PrecTime(LightningModule):
 
     def __share_step(self, batch, mode: str) -> torch.Tensor:
         output = self.model(
-            batch["inter_window_context"],
-            batch["loss"],
+            batch["feature"],
+            batch["dense_label"],
         )
         loss: torch.Tensor = output["loss"]
 
@@ -73,30 +70,31 @@ class PrecTime(LightningModule):
                 logger=True,
                 prog_bar=True,
             )
+            self.validation_loss.append(loss.detach().item())
 
         return loss
 
     def on_validation_epoch_end(self):
-        keys = []
-        for x in self.validation_step_outputs:
-            keys.extend(x[0])
-        labels = np.concatenate([x[1] for x in self.validation_step_outputs])
-        preds = np.concatenate([x[2] for x in self.validation_step_outputs])
-        losses = np.array([x[3] for x in self.validation_step_outputs])
-        loss = losses.mean()
+        # keys = []
+        # for x in self.validation_step_outputs:
+        #    keys.extend(x[0])
+        # labels = np.concatenate([x[1] for x in self.validation_step_outputs])
+        # preds = np.concatenate([x[2] for x in self.validation_step_outputs])
+        # losses = np.array([x[3] for x in self.validation_step_outputs])
+        loss = np.array(self.validation_loss).mean()
 
-        val_pred_df = post_process_for_seg(
-            keys=keys,
-            preds=preds[:, :, [1, 2]],
-            score_th=self.cfg.pp.score_th,
-            distance=self.cfg.pp.distance,
-        )
+        # val_pred_df = post_process_for_seg(
+        #    keys=keys,
+        #    preds=preds[:, :, [1, 2]],
+        #    score_th=self.cfg.pp.score_th,
+        #    distance=self.cfg.pp.distance,
+        # )
 
         if loss < self.__best_loss:
-            np.save("keys.npy", np.array(keys))
-            np.save("labels.npy", labels)
-            np.save("preds.npy", preds)
-            val_pred_df.write_csv("val_pred_df.csv")
+            # np.save("keys.npy", np.array(keys))
+            #    np.save("labels.npy", labels)
+            #    np.save("preds.npy", preds)
+            #    val_pred_df.write_csv("val_pred_df.csv")
             torch.save(self.model.state_dict(), "best_model.pth")
             print(f"Saved best model {self.__best_loss} -> {loss}")
             self.__best_loss = loss
