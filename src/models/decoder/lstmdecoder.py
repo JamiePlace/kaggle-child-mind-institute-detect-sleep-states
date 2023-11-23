@@ -7,22 +7,20 @@ class LSTMDecoder(nn.Module):
         self,
         input_size: int,
         hidden_size: int,
-        num_layers: int,
         dropout: float,
-        bidirectional: bool,
         n_classes: int,
     ):
         super().__init__()
-        self.lstm = nn.LSTM(
+        self.lstm1 = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
-            num_layers=num_layers,
+            num_layers=2,
             dropout=dropout,
-            bidirectional=bidirectional,
+            bidirectional=True,
             batch_first=True,
         )
-        hidden_size = hidden_size * 2 if bidirectional else hidden_size
-        self.linear = nn.Linear(hidden_size, n_classes)
+        self.linear = nn.Linear(hidden_size * 2, n_classes)
+        self.softmax = nn.Softmax(dim=2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model.
@@ -33,7 +31,7 @@ class LSTMDecoder(nn.Module):
         Returns:
             torch.Tensor: (batch_size, n_timesteps, n_classes)
         """
-        x = x.transpose(1, 2)  # (batch_size, n_timesteps, n_channels)
-        x, _ = self.lstm(x)
+        x = x.transpose(1, 2)
+        x, _ = self.lstm1(x)
         x = self.linear(x)
-        return x
+        return self.softmax(x)
