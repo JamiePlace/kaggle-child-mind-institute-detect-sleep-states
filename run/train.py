@@ -15,12 +15,11 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers.wandb import WandbLogger
 
 from src.conf import TrainConfig
-from src.modelmodule.seg import SegModel
-from src.datamodule.seg import (
-    SegDataModule,
+from src.modelmodule.prectime import PrecTime
+from src.datamodule.prectime import (
+    PrecTimeDataModule,
     pre_process_for_training,
 )
-from src.datamodule.prectime import pre_process_for_training
 
 # performance due to my class gpu
 torch.set_float32_matmul_precision("medium")
@@ -50,16 +49,11 @@ def main(cfg: TrainConfig):
         pre_process_for_training(cfg)
 
     seed_everything(cfg.seed)
-    # init lightning model
-    datamodule = SegDataModule(cfg)
+
     LOGGER.info("Set Up DataModule")
-    model = SegModel(
-        cfg,
-        datamodule.valid_event_df,
-        len(cfg.features),
-        len(cfg.labels),
-        cfg.duration,
-    )
+    datamodule = PrecTimeDataModule(cfg)
+    # init lightning model
+    model = PrecTime(cfg, len(cfg.features), len(cfg.labels))
 
     # set callbacks
     checkpoint_cb = ModelCheckpoint(
@@ -122,10 +116,8 @@ def main(cfg: TrainConfig):
     model = model.load_from_checkpoint(
         checkpoint_cb.best_model_path,
         cfg=cfg,
-        val_event_df=datamodule.valid_event_df,
         feature_dim=len(cfg.features),
         num_classes=len(cfg.labels),
-        duration=cfg.duration,
     )
     weights_path = str("model_weights.pth")  # type: ignore
     LOGGER.info(f"Extracting and saving best weights: {weights_path}")

@@ -5,6 +5,8 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 from torch.utils.data import DataLoader, Dataset
+from pytorch_lightning import LightningDataModule
+
 from src.conf import TrainConfig
 
 
@@ -181,3 +183,39 @@ class ValidDataset(Dataset):
         fileobj.close()
 
         return output
+
+
+###################
+# DataModule
+###################
+class PrecTimeDataModule(LightningDataModule):
+    def __init__(self, cfg: TrainConfig):
+        super().__init__()
+        self.cfg = cfg
+
+    def train_dataloader(self):
+        train_dataset = TrainDataset(
+            cfg=self.cfg,
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.cfg.dataset.batch_size,
+            shuffle=False,
+            num_workers=self.cfg.dataset.num_workers,
+            pin_memory=True,
+            drop_last=True,
+            persistent_workers=True,
+        )
+        return train_loader
+
+    def val_dataloader(self):
+        valid_dataset = ValidDataset(cfg=self.cfg)
+        valid_loader = DataLoader(
+            valid_dataset,
+            batch_size=self.cfg.dataset.batch_size,
+            shuffle=False,
+            num_workers=self.cfg.dataset.num_workers,
+            pin_memory=True,
+            persistent_workers=True,
+        )
+        return valid_loader

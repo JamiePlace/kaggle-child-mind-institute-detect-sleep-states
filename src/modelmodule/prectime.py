@@ -19,13 +19,11 @@ class PrecTime(LightningModule):
     def __init__(
         self,
         cfg: TrainConfig,
-        val_event_df: pl.DataFrame,
         feature_dim: int,
         num_classes: int,
     ):
         super().__init__()
         self.cfg = cfg
-        self.val_event_df = val_event_df
         self.model = PrecTimeModel(
             in_channels=feature_dim, n_classes=num_classes
         )
