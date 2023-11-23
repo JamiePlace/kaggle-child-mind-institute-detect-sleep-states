@@ -15,12 +15,12 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers.wandb import WandbLogger
 
 from src.conf import TrainConfig
+from src.modelmodule.seg import SegModel
 from src.datamodule.seg import (
     SegDataModule,
     pre_process_for_training,
-    pre_process_for_validation,
 )
-from src.modelmodule.seg import SegModel
+from src.datamodule.prectime import pre_process_for_training
 
 # performance due to my class gpu
 torch.set_float32_matmul_precision("medium")
@@ -48,8 +48,6 @@ def main(cfg: TrainConfig):
 
         LOGGER.info("Processing Data for Training")
         pre_process_for_training(cfg)
-        LOGGER.info("Processing Data for Validation")
-        pre_process_for_validation(cfg)
 
     seed_everything(cfg.seed)
     # init lightning model
