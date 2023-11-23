@@ -16,25 +16,22 @@ from src.datamodule.seg import nearest_valid_size
 from src.models.common import get_model
 from src.utils.metrics import event_detection_ap
 from src.utils.post_process import post_process_for_seg
+from src.models.prectimemodel import PrecTimeModel
 
 
-class PrecTimeModel(LightningModule):
+class PrecTime(LightningModule):
     def __init__(
         self,
         cfg: TrainConfig,
         val_event_df: pl.DataFrame,
         feature_dim: int,
         num_classes: int,
-        duration: int,
     ):
         super().__init__()
         self.cfg = cfg
         self.val_event_df = val_event_df
-        self.model = get_model(
-            cfg,
-            feature_dim=feature_dim,
-            n_classes=num_classes,
-            num_timesteps=duration,
+        self.model = PrecTimeModel(
+            in_channels=feature_dim, n_classes=num_classes
         )
         self.__best_loss = np.inf
         self.val_loss_non_improvement = 0
@@ -53,8 +50,8 @@ class PrecTimeModel(LightningModule):
 
     def __share_step(self, batch, mode: str) -> torch.Tensor:
         output = self.model(
-            batch["feature"],
-            batch["label"],
+            batch["inter_window_context"],
+            batch["loss"],
         )
         loss: torch.Tensor = output["loss"]
 
