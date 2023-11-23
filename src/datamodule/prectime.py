@@ -1,5 +1,34 @@
+from typing import Optional
+from pathlib import Path
 import polars as pl
 import numpy as np
+from tqdm import tqdm
+import pickle
+
+from src.conf import TrainConfig
+
+
+def load_features(
+    feature_names: list[str],
+    series_ids: Optional[list[str]],
+    processed_dir: Path,
+    phase: str,
+) -> dict[str, np.ndarray]:
+    features = {}
+
+    if series_ids is None:
+        series_ids = [
+            series_dir.name for series_dir in (processed_dir / phase).glob("*")
+        ]
+
+    for series_id in series_ids:
+        series_dir = processed_dir / phase / series_id
+        this_feature = []
+        for feature_name in feature_names:
+            this_feature.append(np.load(series_dir / f"{feature_name}.npy"))
+        features[series_dir.name] = np.stack(this_feature, axis=1)
+
+    return features
 
 
 def split_array_into_chunks(
@@ -44,3 +73,54 @@ def split_array_into_chunks(
     )
 
     return chunks[:, :, :-1], dense_labels, sparse_labels
+
+
+###################
+# PRE-PROCESS TRAINING DATA FOR TRAINING AND VALIDATION
+###################
+def pre_process_for_training(cfg: TrainConfig):
+    event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
+    features_path = Path(cfg.dir.processed_dir)
+    # load all of the features for all of the training data
+    # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    features = load_features(
+        feature_names=cfg.features,
+        series_ids=all_series_ids,
+        processed_dir=features_path,
+        phase="train",
+    )
+    event_df = (
+        pl.read_csv(event_df_path)
+        .drop_nulls()
+        .pivot(index=["series_id", "night"], columns="event", values="step")
+        .filter(pl.col("series_id").is_in(all_series_ids))
+        .drop_nulls()
+    )
+
+    output_path = Path(cfg.dir.processed_dir) / "train/"
+
+    for series_id in tqdm(all_series_ids):
+        series_features = features[series_id]
+        series_event_df = event_df.filter(pl.col("series_id") == series_id)
+        series_chunks, dense_labels, sparse_labels = split_array_into_chunks(
+            series_features,
+            series_event_df,
+            cfg.window_size,
+        )
+        # for each chunk, save the chunk and the label
+        for i, (chunk, dense_label, sparse_label) in enumerate(
+            zip(series_chunks, dense_labels, sparse_labels)
+        ):
+            file_name = f"{series_id}_{i:07}.pkl"
+            fileobj = open(output_path / file_name, "wb")
+            pickle.dump(
+                {
+                    "key": f"{series_id}_{i:07}",
+                    "feature": chunk,
+                    "dense_label": dense_label,
+                    "sparse_label": sparse_label,
+                },
+                fileobj,
+            )
+            fileobj.close()

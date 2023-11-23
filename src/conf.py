@@ -122,6 +122,7 @@ class TrainConfig:
     aug: AugmentationConfig
     pp: PostProcessConfig
     refresh_processed_data: bool
+    window_size: int
 
 
 @dataclass
