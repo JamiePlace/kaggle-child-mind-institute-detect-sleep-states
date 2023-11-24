@@ -45,7 +45,7 @@ class PrecTime(LightningModule):
 
     def __share_step(self, batch, mode: str) -> torch.Tensor:
         output = self.model(
-            batch["feature"],
+            batch["feature"].half(),
             batch["dense_label"],
         )
         loss: torch.Tensor = output["loss"]

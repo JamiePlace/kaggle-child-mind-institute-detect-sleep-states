@@ -81,7 +81,7 @@ def main(cfg: TrainConfig):
     )
 
     pl_logger.log_hyperparams(cfg)  # type: ignore
-
+    print(len(datamodule.train_dataloader()))
     trainer = Trainer(
         # env
         default_root_dir=Path.cwd(),

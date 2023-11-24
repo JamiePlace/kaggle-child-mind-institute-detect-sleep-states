@@ -3,8 +3,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from models.feature_extractor.cnn import CNNextractor
-from models.encoder.context import ContextEncoder
+from src.models.feature_extractor.cnn import CNNextractor
+from src.models.encoder.context import ContextEncoder
 
 
 class PrecTimeModel(nn.Module):
@@ -15,7 +15,11 @@ class PrecTimeModel(nn.Module):
     ):
         super().__init__()
         self.feature_extractor = CNNextractor(in_channels=in_channels)
-        self.context_extractor = ContextEncoder(n_classes)
+        self.context_extractor = ContextEncoder(
+            n_classes,
+            input_size=200,
+        )
+        self.linear = nn.Linear(200, n_classes)
         self.loss_fn = nn.BCELoss()
 
     def forward(
@@ -33,7 +37,8 @@ class PrecTimeModel(nn.Module):
         """
         features_flat, features_stacked = self.feature_extractor.forward(x)
         inter_window_context = self.context_extractor.forward(features_flat)
-        loss = self.loss_fn(inter_window_context, labels)
+        linear = self.linear(inter_window_context)
+        loss = self.loss_fn(linear, labels)
 
         output = {
             "inter_window_context": inter_window_context,

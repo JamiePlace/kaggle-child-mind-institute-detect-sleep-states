@@ -93,6 +93,7 @@ class CNNextractor(nn.Module):
         base_filters: int = 128,
     ):
         super().__init__()
+        self.in_channels = in_channels
         self.conv_left = nn.ModuleList()
         self.conv_right = nn.ModuleList()
         dropout = 0.5
@@ -105,9 +106,9 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=1,
-                padding=1,
+                padding="same",
             ),
-            nn.MaxPool1d(kernel_size=2, padding=1),
+            nn.MaxPool1d(kernel_size=2),
             nn.Dropout(p=dropout),
             nn.Conv1d(
                 in_channels=base_filters,
@@ -115,7 +116,7 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_left,
-                padding=1,
+                padding="same",
             ),
             nn.Conv1d(
                 in_channels=base_filters,
@@ -123,7 +124,7 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_left,
-                padding=1,
+                padding="same",
             ),
             nn.Conv1d(
                 in_channels=base_filters,
@@ -131,7 +132,7 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_left,
-                padding=1,
+                padding="same",
             ),
         ]
         layers_right = [
@@ -141,9 +142,9 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_right,
-                padding=1,
+                padding="same",
             ),
-            nn.MaxPool1d(kernel_size=2, padding=1),
+            nn.MaxPool1d(kernel_size=2),
             nn.Dropout(p=0.5),
             nn.Conv1d(
                 in_channels=base_filters,
@@ -151,7 +152,7 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_right,
-                padding=1,
+                padding="same",
             ),
             nn.Conv1d(
                 in_channels=base_filters,
@@ -159,7 +160,7 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_right,
-                padding=1,
+                padding="same",
             ),
             nn.Conv1d(
                 in_channels=base_filters,
@@ -167,7 +168,7 @@ class CNNextractor(nn.Module):
                 kernel_size=5,
                 stride=1,
                 dilation=dilation_right,
-                padding=1,
+                padding="same",
             ),
         ]
         for layer in layers_left:
@@ -185,6 +186,7 @@ class CNNextractor(nn.Module):
             Tuple[Tensor, Tensor]: (some number), (batch_size, base_filters, some number)
         """
         n_batches = x.shape[0]
+        x = x.view((n_batches, self.in_channels, -1))
         out: torch.Tensor
         out_left: torch.Tensor = x
         out_right: torch.Tensor = x
@@ -192,4 +194,5 @@ class CNNextractor(nn.Module):
             out_left = self.conv_left[i](out_left)
             out_right = self.conv_right[i](out_right)
         out = torch.cat([out_left, out_right], dim=2)
+        print(out.shape)
         return out.view((n_batches, -1, 1)), out

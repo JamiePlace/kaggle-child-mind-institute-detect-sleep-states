@@ -42,5 +42,23 @@
 
             ]
         },
+        {
+            "name": "Python: Train | Context",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "exp_name=expdebug",
+                "dataset.batch_size=12",
+                "dataset.num_workers=1",
+                "trainer.check_val_every_n_epoch=1",
+                "trainer.debug=false",
+                "refresh_processed_data=true",
+                "window_size=100",
+
+            ]
+        },
     ],
 }

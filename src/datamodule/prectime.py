@@ -36,12 +36,13 @@ def load_features(
 def split_array_into_chunks(
     array: np.ndarray, event_df: pl.DataFrame, window_size: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # clean up the array such that we don't have data passed the last event
+    array = array[: event_df["wakeup"].max(), :]
+
     num_rows = array.shape[0]
     num_chunks = num_rows // window_size
     remaining_rows = num_rows % window_size
 
-    # clean up the array such that we don't have data passed the last event
-    array = array[: event_df["wakeup"].max(), :]
     # create the label from the event_df
     label = np.zeros(array.shape[0])
     # for each row of event_df find the corresponding rows in array from
@@ -101,7 +102,8 @@ def pre_process_for_training(cfg: TrainConfig):
     )
 
     output_path = Path(cfg.dir.processed_dir) / "train/"
-
+    train_keys = []
+    valid_keys = []
     for series_id in tqdm(all_series_ids):
         series_features = features[series_id]
         series_event_df = event_df.filter(pl.col("series_id") == series_id)
@@ -126,6 +128,20 @@ def pre_process_for_training(cfg: TrainConfig):
                 fileobj,
             )
             fileobj.close()
+            if series_id in cfg.split.train_series_ids:
+                train_keys.append(f"{series_id}_{i:07}")
+            else:
+                valid_keys.append(f"{series_id}_{i:07}")
+    # write keys to file so don't have to scan directory to get keys
+    file_name = "__train_keys__.pkl"
+    fileobj = open(output_path / file_name, "wb")
+    pickle.dump(train_keys, fileobj)
+    fileobj.close()
+
+    file_name = "__valid_keys__.pkl"
+    fileobj = open(output_path / file_name, "wb")
+    pickle.dump(valid_keys, fileobj)
+    fileobj.close()
 
 
 class TrainDataset(Dataset):
@@ -134,21 +150,19 @@ class TrainDataset(Dataset):
         cfg: TrainConfig,
     ):
         self.cfg = cfg
-
-        self.train_data_files = [
-            train_file.name
-            for train_file in (Path(cfg.dir.processed_dir) / "train").glob(
-                "*.pkl"
-            )
-            if train_file.name.split("_")[0] in cfg.split.train_series_ids
-        ]
+        keys_file = (
+            Path(cfg.dir.processed_dir) / "train" / "__train_keys__.pkl"
+        )
+        fileobj = open(keys_file, "rb")
+        self.train_data_files = pickle.load(fileobj)
+        fileobj.close()
 
     def __len__(self):
         return len(self.train_data_files)
 
     def __getitem__(self, idx):
         data_path = Path(self.cfg.dir.processed_dir) / "train"
-        file_name = self.train_data_files[idx]
+        file_name = self.train_data_files[idx] + ".pkl"
 
         fileobj = open(data_path / file_name, "rb")
         output = pickle.load(fileobj)
@@ -163,20 +177,19 @@ class ValidDataset(Dataset):
         cfg: TrainConfig,
     ):
         self.cfg = cfg
-        self.valid_data_files = [
-            valid_file.name
-            for valid_file in (Path(cfg.dir.processed_dir) / "train").glob(
-                "*.pkl"
-            )
-            if valid_file.name.split("_")[0] in cfg.split.valid_series_ids
-        ]
+        keys_file = (
+            Path(cfg.dir.processed_dir) / "train" / "__valid_keys__.pkl"
+        )
+        fileobj = open(keys_file, "rb")
+        self.valid_data_files = pickle.load(fileobj)
+        fileobj.close()
 
     def __len__(self):
         return len(self.valid_data_files)
 
     def __getitem__(self, idx):
         data_path = Path(self.cfg.dir.processed_dir) / "train"
-        file_name = self.valid_data_files[idx]
+        file_name = self.valid_data_files[idx] + ".pkl"
 
         fileobj = open(data_path / file_name, "rb")
         output = pickle.load(fileobj)
@@ -203,7 +216,7 @@ class PrecTimeDataModule(LightningDataModule):
             shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
-            drop_last=True,
+            drop_last=False,
             persistent_workers=True,
         )
         return train_loader
