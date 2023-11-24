@@ -9,6 +9,8 @@ from pytorch_lightning import LightningModule
 from transformers import (
     get_polynomial_decay_schedule_with_warmup,
 )
+from sklearn.metrics import precision_recall_fscore_support
+
 
 from src.conf import TrainConfig
 from src.utils.metrics import event_detection_ap
@@ -34,6 +36,7 @@ class PrecTime(LightningModule):
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
         self.loss_fn = nn.BCEWithLogitsLoss()
+        self.validation_step_outputs = []
 
     def forward(self, x: torch.Tensor) -> dict[str, Optional[torch.Tensor]]:
         return self.model(x)
@@ -51,31 +54,44 @@ class PrecTime(LightningModule):
         predictions: torch.Tensor = output["predictions"]
         loss = self.loss_fn(predictions, batch["sparse_label"].float())
 
+        pr, re, f1 = self.calculate_metrics(
+            batch["sparse_label"],
+            predictions,
+        )
+
         if mode == "train":
-            self.log(
-                f"{mode}_loss",
-                loss.detach().item(),
+            self.log_dict(
+                {
+                    f"{mode}_loss": loss.detach().item(),
+                    f"{mode}_precision": pr,
+                    f"{mode}_recall": re,
+                    f"{mode}_f1": f1,
+                },
                 on_step=False,
                 on_epoch=True,
                 logger=True,
                 prog_bar=True,
             )
-            # self.log(
-            #    f"{mode}_loss_eval_time",
-            #    toc - tic,
-            #    on_step=True,
-            #    on_epoch=False,
-            #    logger=True,
-            #    prog_bar=True,
-            # )
         elif mode == "val":
-            self.log(
-                f"{mode}_loss",
-                loss.detach().item(),
+            self.log_dict(
+                {
+                    f"{mode}_loss": loss.detach().item(),
+                    f"{mode}_precision": pr,
+                    f"{mode}_recall": re,
+                    f"{mode}_f1": f1,
+                },
                 on_step=False,
                 on_epoch=True,
                 logger=True,
                 prog_bar=True,
+            )
+            self.validation_step_outputs.append(
+                (
+                    batch["key"],
+                    batch["dense_label"].numpy(),
+                    batch["sparse_label"].numpy(),
+                    predictions.detach().cpu().numpy(),
+                )
             )
             self.validation_loss.append(loss.detach().item())
 
@@ -85,8 +101,8 @@ class PrecTime(LightningModule):
         # keys = []
         # for x in self.validation_step_outputs:
         #    keys.extend(x[0])
-        # labels = np.concatenate([x[1] for x in self.validation_step_outputs])
-        # preds = np.concatenate([x[2] for x in self.validation_step_outputs])
+        # labels = np.concatenate([x[2] for x in self.validation_step_outputs])
+        # preds = np.concatenate([x[3] for x in self.validation_step_outputs])
         # losses = np.array([x[3] for x in self.validation_step_outputs])
         loss = np.array(self.validation_loss).mean()
 
@@ -126,3 +142,12 @@ class PrecTime(LightningModule):
             power=self.cfg.scheduler.power,
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+
+    @staticmethod
+    def calculate_metrics(
+        labels: torch.Tensor, preds: torch.Tensor
+    ) -> tuple[float, float, float]:
+        pr, re, f1, _ = precision_recall_fscore_support(
+            labels, preds, average="binary"
+        )
+        return pr, re, f1  # type: ignore
