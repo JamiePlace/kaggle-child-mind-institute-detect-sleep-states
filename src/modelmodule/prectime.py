@@ -1,8 +1,9 @@
 from typing import Any, Optional
-
+import timeit
 import numpy as np
 import polars as pl
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from pytorch_lightning import LightningModule
 from transformers import (
@@ -32,11 +33,10 @@ class PrecTime(LightningModule):
         self.validation_loss = []
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
+        self.loss_fn = nn.BCEWithLogitsLoss()
 
-    def forward(
-        self, x: torch.Tensor, labels: Optional[torch.Tensor] = None
-    ) -> dict[str, Optional[torch.Tensor]]:
-        return self.model(x, labels)
+    def forward(self, x: torch.Tensor) -> dict[str, Optional[torch.Tensor]]:
+        return self.model(x)
 
     def training_step(self, batch, batch_idx):
         return self.__share_step(batch, "train")
@@ -46,10 +46,10 @@ class PrecTime(LightningModule):
 
     def __share_step(self, batch, mode: str) -> torch.Tensor:
         output = self.model(
-            batch["feature"].half(),
-            batch["sparse_label"],
+            batch["feature"].float(),
         )
-        loss: torch.Tensor = output["loss"]
+        predictions: torch.Tensor = output["predictions"]
+        loss = self.loss_fn(predictions, batch["sparse_label"].float())
 
         if mode == "train":
             self.log(
@@ -60,6 +60,14 @@ class PrecTime(LightningModule):
                 logger=True,
                 prog_bar=True,
             )
+            # self.log(
+            #    f"{mode}_loss_eval_time",
+            #    toc - tic,
+            #    on_step=True,
+            #    on_epoch=False,
+            #    logger=True,
+            #    prog_bar=True,
+            # )
         elif mode == "val":
             self.log(
                 f"{mode}_loss",
@@ -108,8 +116,6 @@ class PrecTime(LightningModule):
             print("Loading Previously Saved Best Model")
             self.model.load_state_dict(torch.load("best_model.pth"))
             self.val_loss_non_improvement = 0
-
-        self.validation_step_outputs.clear()
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)

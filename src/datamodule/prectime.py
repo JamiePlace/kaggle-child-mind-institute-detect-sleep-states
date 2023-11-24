@@ -4,6 +4,7 @@ import polars as pl
 import numpy as np
 from tqdm import tqdm
 import pickle
+import torch
 from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning import LightningDataModule
 

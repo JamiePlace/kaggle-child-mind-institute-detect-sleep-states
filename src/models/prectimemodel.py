@@ -21,12 +21,11 @@ class PrecTimeModel(nn.Module):
         self.context_extractor = ContextEncoder(
             input_size=cfg.window_size * 128,
         )
-        self.loss_fn = nn.BCEWithLogitsLoss()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(
         self,
         x: torch.Tensor,
-        labels: torch.Tensor,
     ) -> dict[str, torch.Tensor]:
         """Forward pass of the model.
 
@@ -36,14 +35,10 @@ class PrecTimeModel(nn.Module):
         Returns:
             dict[str, torch.Tensor]: logits (batch_size, n_timesteps, n_classes)
         """
-        features_flat, features_stacked = self.feature_extractor.forward(x)
-        inter_window_context = self.context_extractor.forward(features_flat)
-        labels = labels.float()
-        loss = self.loss_fn(inter_window_context, labels)
+        x, _ = self.feature_extractor(x)
+        x = self.context_extractor(x)
 
-        output = {
-            "inter_window_context": inter_window_context,
-            "loss": loss,
+        return {
+            "inter_window_context": x,
+            "predictions": self.sigmoid(x).squeeze(),
         }
-
-        return output

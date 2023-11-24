@@ -20,7 +20,6 @@ class ContextEncoder(nn.Module):
             batch_first=True,
         )
         self.fc = nn.Linear(self.hidden_size * 2, 1)
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model.
@@ -35,4 +34,4 @@ class ContextEncoder(nn.Module):
         x, _ = self.lstm1(x)
         x = x.squeeze()
         x = self.fc(x)
-        return self.sigmoid(x).squeeze()
+        return x

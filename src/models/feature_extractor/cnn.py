@@ -94,12 +94,11 @@ class CNNextractor(nn.Module):
     ):
         super().__init__()
         self.in_channels = in_channels
-        self.conv_left = nn.ModuleList()
         self.conv_right = nn.ModuleList()
         dropout = 0.5
         dilation_left = 1
         dilation_right = 4
-        layers_left = [
+        self.conv_left = nn.Sequential(
             nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=base_filters,
@@ -134,8 +133,8 @@ class CNNextractor(nn.Module):
                 dilation=dilation_left,
                 padding="same",
             ),
-        ]
-        layers_right = [
+        )
+        self.conv_right = nn.Sequential(
             nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=base_filters,
@@ -170,11 +169,11 @@ class CNNextractor(nn.Module):
                 dilation=dilation_right,
                 padding="same",
             ),
-        ]
-        for layer in layers_left:
-            self.conv_left.append(layer)
-        for layer in layers_right:
-            self.conv_right.append(layer)
+        )
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass of the model.
@@ -185,13 +184,9 @@ class CNNextractor(nn.Module):
         Returns:
             Tuple[Tensor, Tensor]: (some number), (batch_size, base_filters, some number)
         """
-        n_batches = x.shape[0]
-        x = x.view((n_batches, self.in_channels, -1))
-        out: torch.Tensor
-        out_left: torch.Tensor = x
-        out_right: torch.Tensor = x
-        for i in range(len(self.conv_left)):
-            out_left = self.conv_left[i](out_left)
-            out_right = self.conv_right[i](out_right)
-        out = torch.cat([out_left, out_right], dim=2)
-        return out.view((n_batches, -1, 1)), out
+        x = x.view((x.shape[0], self.in_channels, -1))
+        out_left: torch.Tensor = self.conv_left(x)
+        out_right: torch.Tensor = self.conv_right(x)
+        return torch.cat([out_left, out_right], dim=2).view(
+            (x.shape[0], -1, 1)
+        ), torch.cat([out_left, out_right], dim=2)

@@ -86,7 +86,7 @@ def main(cfg: TrainConfig):
         default_root_dir=Path.cwd(),
         # num_nodes=cfg.training.num_gpus,
         accelerator=cfg.trainer.accelerator,
-        precision="16-mixed" if cfg.trainer.use_amp else "32",
+        precision="32",
         # training
         fast_dev_run=cfg.trainer.debug,  # run only 1 train batch and 1 val batch
         max_epochs=cfg.trainer.epochs,
