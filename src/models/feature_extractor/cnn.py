@@ -194,5 +194,4 @@ class CNNextractor(nn.Module):
             out_left = self.conv_left[i](out_left)
             out_right = self.conv_right[i](out_right)
         out = torch.cat([out_left, out_right], dim=2)
-        print(out.shape)
         return out.view((n_batches, -1, 1)), out

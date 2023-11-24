@@ -5,27 +5,28 @@ import torch.nn as nn
 
 from src.models.feature_extractor.cnn import CNNextractor
 from src.models.encoder.context import ContextEncoder
+from src.conf import TrainConfig
 
 
 class PrecTimeModel(nn.Module):
     def __init__(
         self,
+        cfg: TrainConfig,
         in_channels: int,
         n_classes: int,
     ):
         super().__init__()
+        self.n_classes = n_classes
         self.feature_extractor = CNNextractor(in_channels=in_channels)
         self.context_extractor = ContextEncoder(
-            n_classes,
-            input_size=200,
+            input_size=cfg.window_size * 128,
         )
-        self.linear = nn.Linear(200, n_classes)
-        self.loss_fn = nn.BCELoss()
+        self.loss_fn = nn.BCEWithLogitsLoss()
 
     def forward(
         self,
         x: torch.Tensor,
-        labels: Optional[torch.Tensor] = None,
+        labels: torch.Tensor,
     ) -> dict[str, torch.Tensor]:
         """Forward pass of the model.
 
@@ -37,8 +38,8 @@ class PrecTimeModel(nn.Module):
         """
         features_flat, features_stacked = self.feature_extractor.forward(x)
         inter_window_context = self.context_extractor.forward(features_flat)
-        linear = self.linear(inter_window_context)
-        loss = self.loss_fn(linear, labels)
+        labels = labels.float()
+        loss = self.loss_fn(inter_window_context, labels)
 
         output = {
             "inter_window_context": inter_window_context,

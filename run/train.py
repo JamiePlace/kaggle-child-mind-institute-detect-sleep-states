@@ -53,7 +53,7 @@ def main(cfg: TrainConfig):
     LOGGER.info("Set Up DataModule")
     datamodule = PrecTimeDataModule(cfg)
     # init lightning model
-    model = PrecTime(cfg, len(cfg.features), len(cfg.labels))
+    model = PrecTime(cfg, len(cfg.features), 2)
 
     # set callbacks
     checkpoint_cb = ModelCheckpoint(
@@ -81,7 +81,6 @@ def main(cfg: TrainConfig):
     )
 
     pl_logger.log_hyperparams(cfg)  # type: ignore
-    print(len(datamodule.train_dataloader()))
     trainer = Trainer(
         # env
         default_root_dir=Path.cwd(),
@@ -117,7 +116,7 @@ def main(cfg: TrainConfig):
         checkpoint_cb.best_model_path,
         cfg=cfg,
         feature_dim=len(cfg.features),
-        num_classes=len(cfg.labels),
+        num_classes=2,
     )
     weights_path = str("model_weights.pth")  # type: ignore
     LOGGER.info(f"Extracting and saving best weights: {weights_path}")

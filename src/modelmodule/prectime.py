@@ -23,9 +23,10 @@ class PrecTime(LightningModule):
         num_classes: int,
     ):
         super().__init__()
+        self.num_classes = num_classes
         self.cfg = cfg
         self.model = PrecTimeModel(
-            in_channels=feature_dim, n_classes=num_classes
+            cfg, in_channels=feature_dim, n_classes=num_classes
         )
         self.__best_loss = np.inf
         self.validation_loss = []
@@ -46,7 +47,7 @@ class PrecTime(LightningModule):
     def __share_step(self, batch, mode: str) -> torch.Tensor:
         output = self.model(
             batch["feature"].half(),
-            batch["dense_label"],
+            batch["sparse_label"],
         )
         loss: torch.Tensor = output["loss"]
 
