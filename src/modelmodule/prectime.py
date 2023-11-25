@@ -10,7 +10,7 @@ from transformers import (
     get_polynomial_decay_schedule_with_warmup,
     get_cosine_schedule_with_warmup,
 )
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 
 from src.conf import TrainConfig
@@ -37,82 +37,94 @@ class PrecTime(LightningModule):
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
         self.loss_fn = nn.BCEWithLogitsLoss()
-        self.validation_step_outputs = []
+        self.training_step_outputs = {"preds": [], "labels": []}
+        self.validation_step_outputs = {"preds": [], "labels": []}
 
     def forward(self, x: torch.Tensor) -> dict[str, Optional[torch.Tensor]]:
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        return self.__share_step(batch, "train")
-
-    def validation_step(self, batch, batch_idx):
-        return self.__share_step(batch, "val")
-
-    def __share_step(self, batch, mode: str) -> torch.Tensor:
         output = self.model(
             batch["feature"].float(),
         )
         predictions: torch.Tensor = output["predictions"]
         loss = self.loss_fn(predictions, batch["sparse_label"].float())
+        self.log_dict(
+            {
+                "train_loss": loss.detach().item(),
+            },
+            on_step=False,
+            on_epoch=True,
+            logger=True,
+            prog_bar=True,
+        )
+        self.training_step_outputs["preds"].append(predictions)
+        self.training_step_outputs["labels"].append(
+            batch["sparse_label"].float()
+        )
+        return loss
 
+    def validation_step(self, batch, batch_idx):
+        output = self.model(
+            batch["feature"].float(),
+        )
+        predictions: torch.Tensor = output["predictions"]
+        loss = self.loss_fn(predictions, batch["sparse_label"].float())
+        self.log_dict(
+            {
+                "val_loss": loss.detach().item(),
+            },
+            on_step=False,
+            on_epoch=True,
+            logger=True,
+            prog_bar=True,
+        )
+        self.validation_loss.append(loss.detach().item())
+        self.validation_step_outputs["preds"].append(predictions)
+        self.validation_step_outputs["labels"].append(
+            batch["sparse_label"].float()
+        )
         # pr, re, f1 = self.calculate_metrics(
         #    batch["sparse_label"].cpu().numpy(),
         #    predictions.detach().cpu().numpy(),
         # )
-
-        if mode == "train":
-            self.log_dict(
-                {
-                    f"{mode}_loss": loss.detach().item(),
-                },
-                on_step=False,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-            )
-        elif mode == "val":
-            self.log_dict(
-                {
-                    f"{mode}_loss": loss.detach().item(),
-                },
-                on_step=False,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-            )
-            self.validation_step_outputs.append(
-                (
-                    batch["key"],
-                    batch["dense_label"].cpu().numpy(),
-                    batch["sparse_label"].cpu().numpy(),
-                    predictions.detach().cpu().numpy(),
-                )
-            )
-            self.validation_loss.append(loss.detach().item())
-
         return loss
 
+    def on_train_epoch_end(self):
+        all_preds = torch.cat(self.training_step_outputs["preds"])
+        all_preds = all_preds.detach().cpu().numpy()
+        all_labels = torch.cat(self.training_step_outputs["labels"])
+        all_labels = all_labels.detach().cpu().numpy()
+
+        all_preds = all_preds.round()
+        pr, re, f1, ac, cm = self.calculate_metrics(
+            labels=all_labels, preds=all_preds
+        )
+        print(
+            f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
+        )
+        print(cm)
+        self.training_step_outputs["preds"].clear()
+        self.training_step_outputs["labels"].clear()
+
     def on_validation_epoch_end(self):
-        # keys = []
-        # for x in self.validation_step_outputs:
-        #    keys.extend(x[0])
-        # labels = np.concatenate([x[2] for x in self.validation_step_outputs])
-        # preds = np.concatenate([x[3] for x in self.validation_step_outputs])
-        # losses = np.array([x[3] for x in self.validation_step_outputs])
         loss = np.array(self.validation_loss).mean()
 
-        # val_pred_df = post_process_for_seg(
-        #    keys=keys,
-        #    preds=preds[:, :, [1, 2]],
-        #    score_th=self.cfg.pp.score_th,
-        #    distance=self.cfg.pp.distance,
-        # )
+        all_preds = torch.cat(self.validation_step_outputs["preds"])
+        all_preds = all_preds.detach().cpu().numpy()
+        all_labels = torch.cat(self.validation_step_outputs["labels"])
+        all_labels = all_labels.detach().cpu().numpy()
+
+        all_preds = all_preds.round()
+        pr, re, f1, ac, cm = self.calculate_metrics(
+            labels=all_labels, preds=all_preds
+        )
+        print(
+            f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
+        )
+        print(cm)
 
         if loss < self.__best_loss:
-            # np.save("keys.npy", np.array(keys))
-            #    np.save("labels.npy", labels)
-            #    np.save("preds.npy", preds)
-            #    val_pred_df.write_csv("val_pred_df.csv")
             torch.save(self.model.state_dict(), "best_model.pth")
             print(f"Saved best model {self.__best_loss} -> {loss}")
             self.__best_loss = loss
@@ -127,6 +139,8 @@ class PrecTime(LightningModule):
             print("Loading Previously Saved Best Model")
             self.model.load_state_dict(torch.load("best_model.pth"))
             self.val_loss_non_improvement = 0
+        self.validation_step_outputs["preds"].clear()
+        self.validation_step_outputs["labels"].clear()
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
@@ -146,8 +160,17 @@ class PrecTime(LightningModule):
     @staticmethod
     def calculate_metrics(
         labels: torch.Tensor, preds: torch.Tensor
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float, float, float, float, pl.DataFrame]:
         pr, re, f1, _ = precision_recall_fscore_support(
             labels, preds.round(), average="binary"
         )
-        return pr, re, f1  # type: ignore
+        accuracy = (labels == preds).mean()
+        cm = confusion_matrix(labels, preds)
+        cm_df = pl.DataFrame(
+            {
+                "labels": ["label_0", "label_1"],
+                "label_0": cm[:, 0],
+                "label_1": cm[:, 1],
+            }
+        )
+        return pr, re, f1, accuracy, cm_df  # type: ignore

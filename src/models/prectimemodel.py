@@ -21,8 +21,8 @@ class PrecTimeModel(nn.Module):
         self.context_extractor = ContextEncoder(
             input_size=cfg.window_size * 128,
         )
+        self.fc = nn.Linear(cfg.window_size * 128, 1)
         self.sigmoid = nn.Sigmoid()
-        self.fc = nn.Linear(200, 1)
 
     def forward(
         self,
@@ -37,8 +37,9 @@ class PrecTimeModel(nn.Module):
             dict[str, torch.Tensor]: logits (batch_size, n_timesteps, n_classes)
         """
         x, _ = self.feature_extractor(x)
-        x = self.context_extractor(x)
+        # x = self.context_extractor(x)
         inter_window_context = x
+        x = x.squeeze()
         x = self.fc(x)
         x = self.sigmoid(x)
         return {

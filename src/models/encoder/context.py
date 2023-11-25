@@ -19,7 +19,6 @@ class ContextEncoder(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        self.fc = nn.Linear(self.hidden_size * 2, 1)
         self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -34,6 +33,4 @@ class ContextEncoder(nn.Module):
         x = x.transpose(1, 2)
         x, _ = self.lstm1(x)
         x = x.squeeze()
-        x = self.relu(x)
-        x = self.fc(x)
         return x

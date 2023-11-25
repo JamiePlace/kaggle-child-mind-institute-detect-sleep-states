@@ -240,7 +240,7 @@ class PrecTimeDataModule(LightningDataModule):
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.cfg.dataset.batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
             drop_last=False,
