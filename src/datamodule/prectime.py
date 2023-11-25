@@ -160,10 +160,28 @@ class TrainDataset(Dataset):
         fileobj = open(keys_file, "rb")
         self.train_data_files = pickle.load(fileobj)
         fileobj.close()
-        if cfg.subsample < 1:
-            k = int(len(self.train_data_files) * cfg.subsample)
+        # filter the train_data_files to include a proportion of negative to positive examples
+        # extrac the positive examples and negative examples
+        pos_files = [
+            file for file in self.train_data_files if "pos" in file.split("_")
+        ]
+        neg_files = [
+            file for file in self.train_data_files if "neg" in file.split("_")
+        ]
+        if cfg.subsample:
+            # subsample the positive examples
+            # get the ratio of pos to neg from the config
+            ratio_in_files = len(pos_files) / len(neg_files)
+            n = len(pos_files) - cfg.dataset.positive_to_negative_ratio * len(
+                neg_files
+            )
+            pos_files = np.random.choice(pos_files, size=int(n), replace=False)
+            self.train_data_files = list(pos_files) + list(neg_files)
+            subsample_size = int(
+                len(self.train_data_files) * cfg.subsample_rate
+            )
             self.train_data_files = list(
-                np.random.choice(self.train_data_files, k)
+                np.random.choice(self.train_data_files, size=subsample_size)
             )
 
     def __len__(self):
