@@ -106,6 +106,7 @@ class TrainConfig:
     exp_name: str
     seed: int
     duration: int
+    subsample: int
     downsample_rate: int
     upsample_rate: int
     labels: list[str]

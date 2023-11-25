@@ -23,6 +23,7 @@ duration: 5760 # duration * 5 = 秒数
 downsample_rate: 2
 upsample_rate: 1
 refresh_processed_data: false
+subsample: 1
 window_size: 100
 
 trainer:

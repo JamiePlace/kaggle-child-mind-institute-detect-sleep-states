@@ -22,6 +22,7 @@ class PrecTimeModel(nn.Module):
             input_size=cfg.window_size * 128,
         )
         self.sigmoid = nn.Sigmoid()
+        self.fc = nn.Linear(200, 1)
 
     def forward(
         self,
@@ -37,8 +38,10 @@ class PrecTimeModel(nn.Module):
         """
         x, _ = self.feature_extractor(x)
         x = self.context_extractor(x)
-
+        inter_window_context = x
+        x = self.fc(x)
+        x = self.sigmoid(x)
         return {
-            "inter_window_context": x,
-            "predictions": self.sigmoid(x).squeeze(),
+            "inter_window_context": inter_window_context,
+            "predictions": x.squeeze(),
         }

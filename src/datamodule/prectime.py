@@ -117,7 +117,9 @@ def pre_process_for_training(cfg: TrainConfig):
         for i, (chunk, dense_label, sparse_label) in enumerate(
             zip(series_chunks, dense_labels, sparse_labels)
         ):
-            file_name = f"{series_id}_{i:07}.pkl"
+            # use sparse label in the file name so that we can easily filter
+            sparse_name = "pos" if sparse_label == 1 else "neg"
+            file_name = f"{series_id}_{sparse_name}_{i:07}.pkl"
             fileobj = open(output_path / file_name, "wb")
             pickle.dump(
                 {
@@ -150,6 +152,7 @@ class TrainDataset(Dataset):
         self,
         cfg: TrainConfig,
     ):
+        self.train_data_files: list[str]
         self.cfg = cfg
         keys_file = (
             Path(cfg.dir.processed_dir) / "train" / "__train_keys__.pkl"
@@ -157,6 +160,11 @@ class TrainDataset(Dataset):
         fileobj = open(keys_file, "rb")
         self.train_data_files = pickle.load(fileobj)
         fileobj.close()
+        if cfg.subsample < 1:
+            k = int(len(self.train_data_files) * cfg.subsample)
+            self.train_data_files = list(
+                np.random.choice(self.train_data_files, k)
+            )
 
     def __len__(self):
         return len(self.train_data_files)

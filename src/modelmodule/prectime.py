@@ -8,6 +8,7 @@ import torch.optim as optim
 from pytorch_lightning import LightningModule
 from transformers import (
     get_polynomial_decay_schedule_with_warmup,
+    get_cosine_schedule_with_warmup,
 )
 from sklearn.metrics import precision_recall_fscore_support
 
@@ -54,18 +55,15 @@ class PrecTime(LightningModule):
         predictions: torch.Tensor = output["predictions"]
         loss = self.loss_fn(predictions, batch["sparse_label"].float())
 
-        pr, re, f1 = self.calculate_metrics(
-            batch["sparse_label"],
-            predictions,
-        )
+        # pr, re, f1 = self.calculate_metrics(
+        #    batch["sparse_label"].cpu().numpy(),
+        #    predictions.detach().cpu().numpy(),
+        # )
 
         if mode == "train":
             self.log_dict(
                 {
                     f"{mode}_loss": loss.detach().item(),
-                    f"{mode}_precision": pr,
-                    f"{mode}_recall": re,
-                    f"{mode}_f1": f1,
                 },
                 on_step=False,
                 on_epoch=True,
@@ -76,9 +74,6 @@ class PrecTime(LightningModule):
             self.log_dict(
                 {
                     f"{mode}_loss": loss.detach().item(),
-                    f"{mode}_precision": pr,
-                    f"{mode}_recall": re,
-                    f"{mode}_f1": f1,
                 },
                 on_step=False,
                 on_epoch=True,
@@ -88,8 +83,8 @@ class PrecTime(LightningModule):
             self.validation_step_outputs.append(
                 (
                     batch["key"],
-                    batch["dense_label"].numpy(),
-                    batch["sparse_label"].numpy(),
+                    batch["dense_label"].cpu().numpy(),
+                    batch["sparse_label"].cpu().numpy(),
                     predictions.detach().cpu().numpy(),
                 )
             )
@@ -135,11 +130,16 @@ class PrecTime(LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
-        scheduler = get_polynomial_decay_schedule_with_warmup(
+        # scheduler = get_polynomial_decay_schedule_with_warmup(
+        #    optimizer,
+        #    num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
+        #    num_training_steps=self.trainer.max_steps,
+        #    power=self.cfg.scheduler.power,
+        # )
+        scheduler = get_cosine_schedule_with_warmup(
             optimizer,
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
             num_training_steps=self.trainer.max_steps,
-            power=self.cfg.scheduler.power,
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
@@ -148,6 +148,6 @@ class PrecTime(LightningModule):
         labels: torch.Tensor, preds: torch.Tensor
     ) -> tuple[float, float, float]:
         pr, re, f1, _ = precision_recall_fscore_support(
-            labels, preds, average="binary"
+            labels, preds.round(), average="binary"
         )
         return pr, re, f1  # type: ignore
