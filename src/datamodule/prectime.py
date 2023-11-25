@@ -119,11 +119,12 @@ def pre_process_for_training(cfg: TrainConfig):
         ):
             # use sparse label in the file name so that we can easily filter
             sparse_name = "pos" if sparse_label == 1 else "neg"
+            key = f"{series_id}_{sparse_name}_{i:07}"
             file_name = f"{series_id}_{sparse_name}_{i:07}.pkl"
             fileobj = open(output_path / file_name, "wb")
             pickle.dump(
                 {
-                    "key": f"{series_id}_{i:07}",
+                    "key": key,
                     "feature": chunk,
                     "dense_label": dense_label,
                     "sparse_label": sparse_label,
@@ -132,9 +133,9 @@ def pre_process_for_training(cfg: TrainConfig):
             )
             fileobj.close()
             if series_id in cfg.split.train_series_ids:
-                train_keys.append(f"{series_id}_{i:07}")
+                train_keys.append(key)
             else:
-                valid_keys.append(f"{series_id}_{i:07}")
+                valid_keys.append(key)
     # write keys to file so don't have to scan directory to get keys
     file_name = "__train_keys__.pkl"
     fileobj = open(output_path / file_name, "wb")
@@ -171,11 +172,10 @@ class TrainDataset(Dataset):
         if cfg.subsample:
             # subsample the positive examples
             # get the ratio of pos to neg from the config
-            ratio_in_files = len(pos_files) / len(neg_files)
-            n = len(pos_files) - cfg.dataset.positive_to_negative_ratio * len(
-                neg_files
+            n = len(neg_files) - cfg.dataset.positive_to_negative_ratio * len(
+                pos_files
             )
-            pos_files = np.random.choice(pos_files, size=int(n), replace=False)
+            neg_files = np.random.choice(neg_files, size=int(n), replace=False)
             self.train_data_files = list(pos_files) + list(neg_files)
             subsample_size = int(
                 len(self.train_data_files) * cfg.subsample_rate
