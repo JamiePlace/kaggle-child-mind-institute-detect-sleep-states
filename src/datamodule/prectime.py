@@ -169,6 +169,7 @@ class TrainDataset(Dataset):
         neg_files = [
             file for file in self.train_data_files if "neg" in file.split("_")
         ]
+        # TODO - if subsample is true then ensure that samples are taken in order from the files
         if cfg.subsample:
             # subsample the positive examples
             # get the ratio of pos to neg from the config
@@ -240,10 +241,10 @@ class PrecTimeDataModule(LightningDataModule):
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.cfg.dataset.batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
-            drop_last=False,
+            drop_last=True,
             persistent_workers=True,
         )
         return train_loader

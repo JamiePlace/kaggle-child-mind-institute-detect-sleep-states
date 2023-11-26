@@ -100,14 +100,14 @@ class PrecTime(LightningModule):
         pr, re, f1, ac, cm = self.calculate_metrics(
             labels=all_labels, preds=all_preds
         )
-        print(
-            f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
-        )
+        cm = cm.rename({"labels": "Train"})
+        print(f"Train: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}")
         print(cm)
         self.training_step_outputs["preds"].clear()
         self.training_step_outputs["labels"].clear()
 
     def on_validation_epoch_end(self):
+        best = False
         loss = np.array(self.validation_loss).mean()
 
         all_preds = torch.cat(self.validation_step_outputs["preds"])
@@ -119,14 +119,15 @@ class PrecTime(LightningModule):
         pr, re, f1, ac, cm = self.calculate_metrics(
             labels=all_labels, preds=all_preds
         )
+        cm = cm.rename({"labels": "Validation"})
         print(
             f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
         )
         print(cm)
 
         if loss < self.__best_loss:
+            best = True
             torch.save(self.model.state_dict(), "best_model.pth")
-            print(f"Saved best model {self.__best_loss} -> {loss}")
             self.__best_loss = loss
             self.val_loss_non_improvement = 0
         else:
@@ -136,11 +137,13 @@ class PrecTime(LightningModule):
             self.val_loss_non_improvement
             > self.cfg.trainer.early_stopping_patience
         ):
-            print("Loading Previously Saved Best Model")
             self.model.load_state_dict(torch.load("best_model.pth"))
             self.val_loss_non_improvement = 0
         self.validation_step_outputs["preds"].clear()
         self.validation_step_outputs["labels"].clear()
+
+        if best:
+            print(f"Saved best model {self.__best_loss} -> {loss}")
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
@@ -162,7 +165,7 @@ class PrecTime(LightningModule):
         labels: torch.Tensor, preds: torch.Tensor
     ) -> tuple[float, float, float, float, pl.DataFrame]:
         pr, re, f1, _ = precision_recall_fscore_support(
-            labels, preds.round(), average="binary"
+            labels, preds.round(), average="binary", zero_division=0
         )
         accuracy = (labels == preds).mean()
         cm = confusion_matrix(labels, preds)
@@ -173,4 +176,4 @@ class PrecTime(LightningModule):
                 "label_1": cm[:, 1],
             }
         )
-        return pr, re, f1, accuracy, cm_df  # type: ignore
+        return round(pr, 4), round(re, 4), round(f1, 4), round(accuracy, 2), cm_df  # type: ignore

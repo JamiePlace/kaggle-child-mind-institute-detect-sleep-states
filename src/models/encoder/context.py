@@ -17,7 +17,7 @@ class ContextEncoder(nn.Module):
             num_layers=2,
             dropout=self.dropout,
             bidirectional=True,
-            batch_first=True,
+            batch_first=False,
         )
         self.relu = nn.ReLU()
 
@@ -25,12 +25,21 @@ class ContextEncoder(nn.Module):
         """Forward pass of the model.
 
         Args:
-            x (torch.Tensor): (batch_size, n_channels, n_timesteps)
+            x (torch.Tensor): (batch_size, n_features, seq_len)
 
         Returns:
             torch.Tensor: (batch_size, n_timesteps, n_classes)
         """
+        # we need to combine the features to be sequential. The features
+        # from one window to another are what we are trying to look at.
+        # decompose batch into a single batch
+        # (batch_size, n_features, seq_len) ->
+        # (batch_size, seq_len, n_features)
+        # we can do this by swapping the second and third dimensions
+        # and declaring the first dimension is not the batch size
         x = x.transpose(1, 2)
         x, _ = self.lstm1(x)
         x = x.squeeze()
+        # extract the last output of the lstm
+        x = x[:, -1]
         return x
