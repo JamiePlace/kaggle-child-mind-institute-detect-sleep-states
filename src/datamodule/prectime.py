@@ -79,6 +79,18 @@ def split_array_into_chunks(
     return chunks[:, :, :-1], dense_labels, sparse_labels
 
 
+# caclulate the number of positive and negative files in the training data
+# directory
+def calculate_class_weights(cfg: TrainConfig) -> list[float]:
+    train_data_dir = Path(cfg.dir.processed_dir) / "train"
+    train_data_files = [
+        train_file.name for train_file in train_data_dir.glob("*.pkl")
+    ]
+    pos_files = [file for file in train_data_files if "pos" in file.split("_")]
+    neg_files = [file for file in train_data_files if "neg" in file.split("_")]
+    return [len(neg_files), len(pos_files)]
+
+
 ###################
 # PRE-PROCESS TRAINING DATA FOR TRAINING AND VALIDATION
 ###################

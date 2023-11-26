@@ -188,5 +188,5 @@ class CNNextractor(nn.Module):
         out_left: torch.Tensor = self.conv_left(x)
         out_right: torch.Tensor = self.conv_right(x)
         return torch.cat([out_left, out_right], dim=2).view(
-            (x.shape[0], -1, 1)
+            (x.shape[0], -1)
         ), torch.cat([out_left, out_right], dim=2)

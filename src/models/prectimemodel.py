@@ -37,9 +37,9 @@ class PrecTimeModel(nn.Module):
             dict[str, torch.Tensor]: logits (batch_size, n_timesteps, n_classes)
         """
         x, _ = self.feature_extractor(x)
-        x = x.squeeze()
         # x = self.context_extractor(x)
         inter_window_context = x
+        x = self.fc(x)
         x = self.sigmoid(x)
         return {
             "inter_window_context": inter_window_context,

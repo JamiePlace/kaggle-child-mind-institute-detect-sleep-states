@@ -25,6 +25,7 @@ class PrecTime(LightningModule):
         cfg: TrainConfig,
         feature_dim: int,
         num_classes: int,
+        class_weights: Optional[list[float]] = None,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -36,7 +37,17 @@ class PrecTime(LightningModule):
         self.validation_loss = []
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
-        self.loss_fn = nn.BCEWithLogitsLoss()
+        # TODO - implement weighted loss
+        # this is done with one hot encoding the label
+        # and assigning a weight to each class
+        # see https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html#torch.nn.BCEWithLogitsLoss
+
+        if class_weights:
+            self.loss_fn = nn.BCEWithLogitsLoss(
+                pos_weight=torch.tensor(class_weights)
+            )
+        else:
+            self.loss_fn = nn.BCEWithLogitsLoss()
         self.training_step_outputs = {"preds": [], "labels": []}
         self.validation_step_outputs = {"preds": [], "labels": []}
 

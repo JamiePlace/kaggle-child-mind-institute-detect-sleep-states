@@ -45,7 +45,7 @@ dataset:
   offset: 10
   sigma: 10
   bg_sampling_rate: 0.5
-  positive_to_negative_ratio: 0.5
+  positive_to_negative_ratio: 1
 
 aug:
   mixup_prob: 0.0

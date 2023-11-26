@@ -52,8 +52,9 @@ def main(cfg: TrainConfig):
 
     LOGGER.info("Set Up DataModule")
     datamodule = PrecTimeDataModule(cfg)
+    class_weights = calculate_class_weights(cfg)
     # init lightning model
-    model = PrecTime(cfg, len(cfg.features), 2)
+    model = PrecTime(cfg, len(cfg.features), 2, class_weights=[1, 1])
 
     # set callbacks
     checkpoint_cb = ModelCheckpoint(
