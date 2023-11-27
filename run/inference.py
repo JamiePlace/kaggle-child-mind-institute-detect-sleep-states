@@ -68,7 +68,7 @@ def inference(
     loader: DataLoader,
     model: nn.Module,
     device: torch.device,
-) -> tuple[list[str], np.ndarray]:
+) -> tuple[list[str], list[np.ndarray]]:
     model = model.to(device)
     model.eval()
 
@@ -84,8 +84,6 @@ def inference(
                 key = batch["key"]
                 preds.append(prediction.detach().cpu().numpy())
                 keys.extend(key)
-
-    preds = np.concatenate(preds)
 
     return keys, preds  # type: ignore
 
@@ -114,20 +112,35 @@ def main(cfg: InferenceConfig):
 
     with trace("inference"):
         keys, preds = inference(test_dataloader, model, device)
+    preds = np.concatenate(preds)
+    # cut off preds of padded chunk
 
     grouped_preds = {}
     with trace("grouping predctions"):
         # for each key there will be 1 prediction
-        # later there will be cfg.windwo_size predictions
+        # later there will be cfg.window_size predictions
         for i, key in enumerate(keys):
             key = key.split("_")[0]
             if key not in grouped_preds.keys():
                 grouped_preds[key] = [preds[i]]
             else:
                 grouped_preds[key].append(preds[i])
+    with trace("resizing predictions"):
+        for key in grouped_preds.keys():
+            original_length = len(grouped_preds[key])
+            grouped_preds[key] = grouped_preds[key][
+                : test_dataloader.dataset.series_length[key]  # type: ignore
+            ]
+            print(
+                f"key: {key}, "
+                f"original length: {original_length}, "
+                f"new length: {len(grouped_preds[key])}"
+            )
+
     with trace("saving predictions"):
         with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
             pickle.dump(grouped_preds, f)
+
     # with trace("make submission"):
     # sub_df = make_submission(
     # keys,

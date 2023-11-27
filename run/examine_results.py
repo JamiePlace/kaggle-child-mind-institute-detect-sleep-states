@@ -33,10 +33,15 @@ def get_label(cfg: InferenceConfig):
     return sparse_label, dense_label, anglez, enmo
 
 
-def expand_sparse_label(cfg: InferenceConfig, sparse_label: list | np.ndarray):
-    expanded_label = np.zeros(len(sparse_label) * cfg.window_size)
+def expand_sparse_label(
+    cfg: InferenceConfig,
+    sparse_label: list | np.ndarray,
+    dense_label: list | np.ndarray,
+):
+    expanded_label = np.zeros(len(dense_label))
     for i, label in enumerate(sparse_label):
         expanded_label[i * cfg.window_size : (i + 1) * cfg.window_size] = label
+    expanded_label = expanded_label[: len(dense_label)]
     return expanded_label
 
 
@@ -49,8 +54,8 @@ def main(cfg: InferenceConfig):
     # Plot the data
     sparse_preds = data[cfg.series_ids[0]]
     sparse_label, dense_label, anglez, enmo = get_label(cfg)
-    sparse_preds = expand_sparse_label(cfg, sparse_preds)
-    sparse_label = expand_sparse_label(cfg, sparse_label)
+    sparse_preds = expand_sparse_label(cfg, sparse_preds, dense_label)
+    sparse_label = expand_sparse_label(cfg, sparse_label, dense_label)
     print(len(dense_label), len(sparse_preds), len(sparse_label))
     fig, ax = plt.subplots(4, 1)
     ax[0].plot(anglez, label="AngleZ")

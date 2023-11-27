@@ -41,7 +41,7 @@ def split_array_into_chunks(
     event_df: Optional[pl.DataFrame],
     window_size: int,
     phase: str,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     # clean up the array such that we don't have data passed the last event
     if phase == "train":
         array = array[: event_df["wakeup"].max(), :]  # type: ignore
@@ -49,6 +49,7 @@ def split_array_into_chunks(
     num_rows = array.shape[0]
     num_chunks = num_rows // window_size
     remaining_rows = num_rows % window_size
+    number_of_steps = array.shape[0]
 
     # for training we need the label
     if phase == "train":
@@ -83,8 +84,8 @@ def split_array_into_chunks(
             ]
         )
 
-        return chunks[:, :, :-1], dense_labels, sparse_labels
-    return chunks, np.array(None), np.array(None)
+        return chunks[:, :, :-1], dense_labels, sparse_labels, 0
+    return chunks, np.array(None), np.array(None), number_of_steps
 
 
 def truncate_features(
@@ -130,7 +131,12 @@ def pre_process_for_training(cfg: TrainConfig):
         series_features = truncate_features(
             cfg, series_features, series_event_df
         )
-        series_chunks, dense_labels, sparse_labels = split_array_into_chunks(
+        (
+            series_chunks,
+            dense_labels,
+            sparse_labels,
+            _,
+        ) = split_array_into_chunks(
             series_features,
             series_event_df,
             cfg.window_size,
@@ -185,15 +191,15 @@ def pre_process_for_inference(cfg: InferenceConfig):
     )
 
     output_path = Path(cfg.dir.processed_dir) / "inference/"
-    # remove all files from the inference directory
-    for file in output_path.glob("*"):
-        os.remove(output_path / file)
+
     inference_keys = []
+    series_length = {}
     for series_id in tqdm(all_series_ids):
         series_features = features[series_id]
-        series_chunks, _, _ = split_array_into_chunks(
+        series_chunks, _, _, number_of_steps = split_array_into_chunks(
             series_features, None, cfg.window_size, phase=cfg.phase
         )
+        series_length[series_id] = number_of_steps
         # for each chunk, save the chunk and the label
         for i, chunk in enumerate(series_chunks):
             key = f"{series_id}_{i:07}"
@@ -213,6 +219,9 @@ def pre_process_for_inference(cfg: InferenceConfig):
     fileobj = open(output_path / file_name, "wb")
     pickle.dump(inference_keys, fileobj)
     fileobj.close()
+
+    with open(output_path / "__series_length__.pkl", "wb") as f:
+        pickle.dump(series_length, f)
 
 
 class TrainDataset(Dataset):
@@ -305,6 +314,11 @@ class TestDataset(Dataset):
         fileobj = open(keys_file, "rb")
         self.valid_data_files = pickle.load(fileobj)
         fileobj.close()
+        with open(
+            Path(cfg.dir.processed_dir) / "inference" / "__series_length__.pkl",
+            "rb",
+        ) as f:
+            self.series_length = pickle.load(f)
 
     def __len__(self):
         return len(self.valid_data_files)
