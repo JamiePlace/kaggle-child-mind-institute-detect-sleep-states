@@ -19,8 +19,7 @@ def load_features(
 ) -> dict[str, np.ndarray]:
     features = {}
     # this is a hack to allow us to use the validation data as inference data
-    if phase == "validation":
-        phase = "train"
+
     if series_ids is None:
         series_ids = [
             series_dir.name for series_dir in (processed_dir / phase).glob("*")
@@ -87,6 +86,17 @@ def split_array_into_chunks(
     return chunks, np.array(None), np.array(None)
 
 
+def truncate_features(
+    cfg: TrainConfig, features: np.ndarray, event_df: pl.DataFrame
+) -> np.ndarray:
+    # find the step value of the last wakeup event
+    last_wakeup_step = event_df.get_column("wakeup").max()
+    # truncate features
+    if last_wakeup_step is not None:
+        features = features[:last_wakeup_step, :]
+    return features
+
+
 ###################
 # PRE-PROCESS TRAINING DATA FOR TRAINING AND VALIDATION
 ###################
@@ -116,6 +126,9 @@ def pre_process_for_training(cfg: TrainConfig):
     for series_id in tqdm(all_series_ids):
         series_features = features[series_id]
         series_event_df = event_df.filter(pl.col("series_id") == series_id)
+        series_features = truncate_features(
+            cfg, series_features, series_event_df
+        )
         series_chunks, dense_labels, sparse_labels = split_array_into_chunks(
             series_features,
             series_event_df,

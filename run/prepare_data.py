@@ -180,9 +180,10 @@ def main(cfg: PrepareDataConfig):
             series_df.group_by("series_id"), total=n_unique
         ):
             this_series_df = add_feature(this_series_df)
-            this_series_df = truncate_features(
-                cfg, this_series_df, str(series_id)
-            )
+            if cfg.phase == "train":
+                this_series_df = truncate_features(
+                    cfg, this_series_df, str(series_id)
+                )
 
             series_dir = processed_dir / series_id  # type: ignore
             save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
