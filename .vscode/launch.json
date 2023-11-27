@@ -8,19 +8,14 @@
             "name": "Python: Inference",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "${workspaceFolder}/run/inference.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
                 "dir=local",
                 "num_workers=1",
-                "exp_name=exp001",
+                "exp_name=context_window_005",
                 "batch_size=32",
-                "duration=5760",
-                "downsample_rate=2",
-                "pp.score_th=0.005",
-                "pp.distance=40",
-                "phase=test"
             ]
         },
         {

@@ -84,7 +84,7 @@ def split_array_into_chunks(
         )
 
         return chunks[:, :, :-1], dense_labels, sparse_labels
-    return chunks[:, :, :-1], np.array(None), np.array(None)
+    return chunks, np.array(None), np.array(None)
 
 
 ###################
@@ -278,28 +278,22 @@ class TestDataset(Dataset):
     def __init__(
         self,
         cfg: InferenceConfig,
-        series_ids: Optional[list[str]] = None,
     ):
         self.cfg = cfg
         keys_file = (
-            Path(cfg.dir.processed_dir) / "train" / "__valid_keys__.pkl"
+            Path(cfg.dir.processed_dir)
+            / "inference"
+            / "__inference_keys__.pkl"
         )
         fileobj = open(keys_file, "rb")
         self.valid_data_files = pickle.load(fileobj)
         fileobj.close()
-        # filter the data files to only include the series_ids
-        if series_ids:
-            self.valid_data_files = [
-                file
-                for file in self.valid_data_files
-                if file.split("_")[0] in series_ids
-            ]
 
     def __len__(self):
         return len(self.valid_data_files)
 
     def __getitem__(self, idx):
-        data_path = Path(self.cfg.dir.processed_dir) / "train"
+        data_path = Path(self.cfg.dir.processed_dir) / "inference"
         file_name = self.valid_data_files[idx] + ".pkl"
 
         fileobj = open(data_path / file_name, "rb")

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from rich import print
+import pickle
 import hydra
 import numpy as np
 import polars as pl
@@ -27,7 +28,7 @@ def load_model(
     model = get_model(
         cfg,
         feature_dim=len(cfg.features),
-        n_classes=len(cfg.labels),
+        n_classes=2,
     )
 
     # load weights
@@ -51,10 +52,7 @@ def get_test_dataloader(cfg: InferenceConfig) -> DataLoader:
     Returns:
         DataLoader: test dataloader
     """
-    series_ids = None
-    if cfg.series_ids:
-        series_ids = cfg.series_ids
-    test_dataset = TestDataset(cfg, series_ids)
+    test_dataset = TestDataset(cfg)
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=cfg.batch_size,
@@ -71,18 +69,21 @@ def inference(
     model: nn.Module,
     device: torch.device,
 ) -> tuple[list[str], np.ndarray]:
+    model = model.to(device)
     model.eval()
 
     keys = []
     preds = []
     for batch in tqdm(loader, desc="inference"):
         with torch.no_grad():
-            x = batch["feature"].to(device)
-            pred = model(x)
-            pred = pred.argmax(dim=1)
-            key = batch["key"]
-            preds.append(pred.detach().cpu().numpy())
-            keys.extend(key)
+            with torch.cuda.amp.autocast(enabled=True):  # type: ignore
+                x = batch["feature"].half().to(device)
+                model_output = model(x)
+                prediction = model_output["predictions"]
+                prediction = prediction.argmax(dim=1)
+                key = batch["key"]
+                preds.append(prediction.detach().cpu().numpy())
+                keys.extend(key)
 
     preds = np.concatenate(preds)
 
@@ -114,8 +115,19 @@ def main(cfg: InferenceConfig):
     with trace("inference"):
         keys, preds = inference(test_dataloader, model, device)
 
-    print(keys)
-    print(preds)
+    grouped_preds = {}
+    with trace("grouping predctions"):
+        # for each key there will be 1 prediction
+        # later there will be cfg.windwo_size predictions
+        for i, key in enumerate(keys):
+            key = key.split("_")[0]
+            if key not in grouped_preds.keys():
+                grouped_preds[key] = [preds[i]]
+            else:
+                grouped_preds[key].append(preds[i])
+    with trace("saving predictions"):
+        with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
+            pickle.dump(grouped_preds, f)
     # with trace("make submission"):
     # sub_df = make_submission(
     # keys,
