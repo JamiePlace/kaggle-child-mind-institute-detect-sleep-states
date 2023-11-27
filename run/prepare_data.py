@@ -141,6 +141,11 @@ def main(cfg: PrepareDataConfig):
                 Path(cfg.dir.data_dir) / f"{cfg.phase}_series.parquet",
                 low_memory=True,
             )
+        elif cfg.phase in "validation":
+            series_lf = pl.scan_parquet(
+                Path(cfg.dir.data_dir) / "train_series.parquet",
+                low_memory=True,
+            )
         elif cfg.phase == "dev":
             series_lf = pl.scan_parquet(
                 Path(cfg.dir.processed_dir) / f"{cfg.phase}_series.parquet",
@@ -182,19 +187,19 @@ def main(cfg: PrepareDataConfig):
             series_dir = processed_dir / series_id  # type: ignore
             save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
 
-    with trace("Preparind data for model"):
-        data_files = [
-            file.name
-            for file in (Path(cfg.dir.processed_dir) / cfg.phase).glob("*.pkl")
-        ]
+    data_files = [
+        file.name
+        for file in (Path(cfg.dir.processed_dir) / cfg.phase).glob("*.pkl")
+    ]
 
-        with trace("Remove old files"):
-            for file in data_files:
-                os.remove(Path(cfg.dir.processed_dir) / cfg.phase / file)
+    with trace("Remove old files"):
+        for file in data_files:
+            os.remove(Path(cfg.dir.processed_dir) / cfg.phase / file)
 
+    with trace("Prepare data for model"):
         if cfg.phase == "train":
             pre_process_for_training(cfg)
-        if cfg.phase == "test":
+        if cfg.phase == "test" or cfg.phase == "validation":
             pre_process_for_inference(cfg)
 
 

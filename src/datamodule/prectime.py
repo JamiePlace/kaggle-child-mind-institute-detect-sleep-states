@@ -18,7 +18,9 @@ def load_features(
     phase: str,
 ) -> dict[str, np.ndarray]:
     features = {}
-
+    # this is a hack to allow us to use the validation data as inference data
+    if phase == "validation":
+        phase = "train"
     if series_ids is None:
         series_ids = [
             series_dir.name for series_dir in (processed_dir / phase).glob("*")
