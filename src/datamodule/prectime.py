@@ -4,6 +4,7 @@ import polars as pl
 import numpy as np
 from tqdm import tqdm
 import pickle
+import os
 import torch
 from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning import LightningDataModule
@@ -184,6 +185,9 @@ def pre_process_for_inference(cfg: InferenceConfig):
     )
 
     output_path = Path(cfg.dir.processed_dir) / "inference/"
+    # remove all files from the inference directory
+    for file in output_path.glob("*"):
+        os.remove(output_path / file)
     inference_keys = []
     for series_id in tqdm(all_series_ids):
         series_features = features[series_id]

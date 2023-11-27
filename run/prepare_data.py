@@ -194,9 +194,16 @@ def main(cfg: PrepareDataConfig):
     ]
 
     with trace("Remove old files"):
-        for file in data_files:
+        for file in tqdm(data_files):
             os.remove(Path(cfg.dir.processed_dir) / cfg.phase / file)
 
+    inference_files = [
+        file.name
+        for file in (Path(cfg.dir.processed_dir) / "inference").glob("*.pkl")
+    ]
+    with trace("Removing old inference files"):
+        for file in tqdm(inference_files):
+            os.remove(Path(cfg.dir.processed_dir) / file)
     with trace("Prepare data for model"):
         if cfg.phase == "train":
             pre_process_for_training(cfg)
