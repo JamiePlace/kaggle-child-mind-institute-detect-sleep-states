@@ -93,15 +93,6 @@ class WeightConfig:
 
 
 @dataclass
-class PrepareDataConfig:
-    dir: DirConfig
-    phase: str
-    stacked_lookback: int
-    stacked_count: int
-    stack_cols: list[str]
-
-
-@dataclass
 class TrainConfig:
     exp_name: str
     seed: int
@@ -147,3 +138,13 @@ class InferenceConfig(TrainConfig):
     weight: WeightConfig
     aug: AugmentationConfig
     pp: PostProcessConfig
+    series_ids: list[str]
+
+
+@dataclass
+class PrepareDataConfig(TrainConfig):
+    dir: DirConfig
+    phase: str
+    stacked_lookback: int
+    stacked_count: int
+    stack_cols: list[str]

@@ -12,6 +12,7 @@ hydra:
 defaults:
   - _self_
   - dir: local
+  - .@_here_: train
 
 phase: train
 stacked_lookback: 0

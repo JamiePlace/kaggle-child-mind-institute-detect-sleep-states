@@ -178,6 +178,12 @@ def main(cfg: PrepareDataConfig):
             series_dir = processed_dir / series_id  # type: ignore
             save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
 
+    with trace("Preparind data for model"):
+        if cfg.phase == "train":
+            pre_process_for_training(cfg)
+        if cfg.phase == "test":
+            pre_process_for_inference(cfg)
+
 
 if __name__ == "__main__":
     main()

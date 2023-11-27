@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning import LightningDataModule
 
-from src.conf import TrainConfig
+from src.conf import TrainConfig, InferenceConfig
 
 
 def load_features(
@@ -35,48 +35,54 @@ def load_features(
 
 
 def split_array_into_chunks(
-    array: np.ndarray, event_df: pl.DataFrame, window_size: int
+    array: np.ndarray,
+    event_df: Optional[pl.DataFrame],
+    window_size: int,
+    phase: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     # clean up the array such that we don't have data passed the last event
-    array = array[: event_df["wakeup"].max(), :]
+    if phase == "train":
+        array = array[: event_df["wakeup"].max(), :]  # type: ignore
 
     num_rows = array.shape[0]
     num_chunks = num_rows // window_size
     remaining_rows = num_rows % window_size
 
-    # create the label from the event_df
-    label = np.zeros(array.shape[0])
-    # for each row of event_df find the corresponding rows in array from
-    # event_df["onset"] to event_df["wakeup"] to set the label to 1
-    for row in event_df.rows(named=True):
-        label[row["onset"] : row["wakeup"] + 1] = 1
+    # for training we need the label
+    if phase == "train":
+        # create the label from the event_df
+        label = np.zeros(array.shape[0])
+        # for each row of event_df find the corresponding rows in array from
+        # event_df["onset"] to event_df["wakeup"] to set the label to 1
+        for row in event_df.rows(named=True):  # type: ignore
+            label[row["onset"] : row["wakeup"] + 1] = 1
 
-    array_with_label = np.concatenate((array, label[:, None]), axis=1)
+        array = np.concatenate((array, label[:, None]), axis=1)
     # Split the array into chunks of size window_size
-    chunks = np.split(array_with_label[: num_chunks * window_size], num_chunks)
+    chunks = np.split(array[: num_chunks * window_size], num_chunks)
 
     # If there are remaining rows, create a chunk with the remaining rows and pad with zeros
     if remaining_rows > 0:
         remaining_chunk = np.concatenate(
             (
-                array_with_label[num_chunks * window_size :],
-                np.zeros(
-                    (window_size - remaining_rows, array_with_label.shape[1])
-                ),
+                array[num_chunks * window_size :],
+                np.zeros((window_size - remaining_rows, array.shape[1])),
             )
         )
         chunks.append(remaining_chunk)
     chunks = np.array(chunks)
 
-    dense_labels = chunks[:, :, -1]
-    sparse_labels = np.array(
-        [
-            0 if val < window_size // 2 else 1
-            for val in chunks[:, :, -1].sum(axis=1)
-        ]
-    )
+    if phase == "train":
+        dense_labels = chunks[:, :, -1]
+        sparse_labels = np.array(
+            [
+                0 if val < window_size // 2 else 1
+                for val in chunks[:, :, -1].sum(axis=1)
+            ]
+        )
 
-    return chunks[:, :, :-1], dense_labels, sparse_labels
+        return chunks[:, :, :-1], dense_labels, sparse_labels
+    return chunks[:, :, :-1], np.array(None), np.array(None)
 
 
 ###################
@@ -112,6 +118,7 @@ def pre_process_for_training(cfg: TrainConfig):
             series_features,
             series_event_df,
             cfg.window_size,
+            phase="train",
         )
         # for each chunk, save the chunk and the label
         for i, (chunk, dense_label, sparse_label) in enumerate(
@@ -148,6 +155,47 @@ def pre_process_for_training(cfg: TrainConfig):
     fileobj.close()
 
 
+# pre process data for inference. no event_df is needed
+def pre_process_for_inference(cfg: InferenceConfig):
+    features_path = Path(cfg.dir.processed_dir)
+    # load all of the features for all of the training data
+    # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    all_series_ids = cfg.series_ids
+    features = load_features(
+        feature_names=cfg.features,
+        series_ids=all_series_ids,
+        processed_dir=features_path,
+        phase=cfg.phase,
+    )
+
+    output_path = Path(cfg.dir.processed_dir) / "inference/"
+    inference_keys = []
+    for series_id in tqdm(all_series_ids):
+        series_features = features[series_id]
+        series_chunks, _, _ = split_array_into_chunks(
+            series_features, None, cfg.window_size, phase=cfg.phase
+        )
+        # for each chunk, save the chunk and the label
+        for i, chunk in enumerate(series_chunks):
+            key = f"{series_id}_{i:07}"
+            file_name = f"{series_id}_{i:07}.pkl"
+            fileobj = open(output_path / file_name, "wb")
+            pickle.dump(
+                {
+                    "key": key,
+                    "feature": chunk,
+                },
+                fileobj,
+            )
+            fileobj.close()
+            inference_keys.append(key)
+    # write keys to file so don't have to scan directory to get keys
+    file_name = "__inference_keys__.pkl"
+    fileobj = open(output_path / file_name, "wb")
+    pickle.dump(inference_keys, fileobj)
+    fileobj.close()
+
+
 class TrainDataset(Dataset):
     def __init__(
         self,
@@ -173,9 +221,7 @@ class TrainDataset(Dataset):
         if cfg.subsample:
             # subsample the positive examples
             # get the ratio of pos to neg from the config
-            n = cfg.dataset.positive_to_negative_ratio * len(
-                pos_files
-            )
+            n = cfg.dataset.positive_to_negative_ratio * len(pos_files)
             neg_files = np.random.choice(neg_files, size=int(n), replace=False)
             self.train_data_files = list(pos_files) + list(neg_files)
             subsample_size = int(
@@ -211,6 +257,41 @@ class ValidDataset(Dataset):
         fileobj = open(keys_file, "rb")
         self.valid_data_files = pickle.load(fileobj)
         fileobj.close()
+
+    def __len__(self):
+        return len(self.valid_data_files)
+
+    def __getitem__(self, idx):
+        data_path = Path(self.cfg.dir.processed_dir) / "train"
+        file_name = self.valid_data_files[idx] + ".pkl"
+
+        fileobj = open(data_path / file_name, "rb")
+        output = pickle.load(fileobj)
+        fileobj.close()
+
+        return output
+
+
+class TestDataset(Dataset):
+    def __init__(
+        self,
+        cfg: InferenceConfig,
+        series_ids: Optional[list[str]] = None,
+    ):
+        self.cfg = cfg
+        keys_file = (
+            Path(cfg.dir.processed_dir) / "train" / "__valid_keys__.pkl"
+        )
+        fileobj = open(keys_file, "rb")
+        self.valid_data_files = pickle.load(fileobj)
+        fileobj.close()
+        # filter the data files to only include the series_ids
+        if series_ids:
+            self.valid_data_files = [
+                file
+                for file in self.valid_data_files
+                if file.split("_")[0] in series_ids
+            ]
 
     def __len__(self):
         return len(self.valid_data_files)

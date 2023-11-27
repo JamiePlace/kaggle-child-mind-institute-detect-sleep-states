@@ -12,11 +12,9 @@ from torchvision.transforms.functional import resize
 from tqdm import tqdm
 
 from src.conf import TrainConfig, InferenceConfig
-from src.datamodule.seg import (
+from src.datamodule.prectime import (
     TestDataset,
     load_features,
-    load_chunk_features,
-    nearest_valid_size,
 )
 from src.models.common import get_model
 from src.utils.common import trace
@@ -53,16 +51,10 @@ def get_test_dataloader(cfg: InferenceConfig) -> DataLoader:
     Returns:
         DataLoader: test dataloader
     """
-    feature_dir = Path(cfg.dir.processed_dir) / cfg.phase
-    series_ids = [x.name for x in feature_dir.glob("*")]
-    features = load_chunk_features(
-        duration=cfg.duration,
-        feature_names=cfg.features,
-        series_ids=series_ids,
-        processed_dir=Path(cfg.dir.processed_dir),
-        phase=cfg.phase,
-    )
-    test_dataset = TestDataset(cfg, chunk_features=features)
+    series_ids = None
+    if cfg.series_ids:
+        series_ids = cfg.series_ids
+    test_dataset = TestDataset(cfg, series_ids)
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=cfg.batch_size,
