@@ -203,7 +203,7 @@ def main(cfg: PrepareDataConfig):
     ]
     with trace("Removing old inference files"):
         for file in tqdm(inference_files):
-            os.remove(Path(cfg.dir.processed_dir) / file)
+            os.remove(Path(cfg.dir.processed_dir) / "inference" / file)
     with trace("Prepare data for model"):
         if cfg.phase == "train":
             pre_process_for_training(cfg)
