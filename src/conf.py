@@ -142,7 +142,7 @@ class InferenceConfig(TrainConfig):
 
 
 @dataclass
-class PrepareDataConfig(TrainConfig):
+class PrepareDataConfig(InferenceConfig):
     dir: DirConfig
     phase: str
     stacked_lookback: int

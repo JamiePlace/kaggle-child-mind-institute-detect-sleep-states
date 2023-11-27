@@ -1,4 +1,5 @@
 import shutil
+import os
 from pathlib import Path
 
 import hydra
@@ -8,7 +9,10 @@ from tqdm import tqdm
 
 from src.conf import PrepareDataConfig
 from src.utils.common import trace
-from src.datamodule.seg import pre_process_for_training
+from src.datamodule.prectime import (
+    pre_process_for_training,
+    pre_process_for_inference,
+)
 
 SERIES_SCHEMA = {
     "series_id": pl.Utf8,
@@ -179,6 +183,15 @@ def main(cfg: PrepareDataConfig):
             save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
 
     with trace("Preparind data for model"):
+        data_files = [
+            file.name
+            for file in (Path(cfg.dir.processed_dir) / cfg.phase).glob("*.pkl")
+        ]
+
+        with trace("Remove old files"):
+            for file in data_files:
+                os.remove(Path(cfg.dir.processed_dir) / cfg.phase / file)
+
         if cfg.phase == "train":
             pre_process_for_training(cfg)
         if cfg.phase == "test":

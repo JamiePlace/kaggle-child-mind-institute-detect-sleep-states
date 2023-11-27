@@ -105,7 +105,6 @@ def make_submission(
 @hydra.main(config_path="conf", config_name="inference", version_base="1.2")
 def main(cfg: InferenceConfig):
     seed_everything(cfg.seed)
-
     with trace("load test dataloader"):
         test_dataloader = get_test_dataloader(cfg)
     with trace("load model"):
