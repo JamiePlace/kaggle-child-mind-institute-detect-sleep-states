@@ -10,34 +10,36 @@ from torch.utils.data import DataLoader
 from torchvision.transforms.functional import resize
 from tqdm import tqdm
 
-from src.conf import InferenceConfig
-from src.datamodule.seg import TestDataset, load_features, load_chunk_features, nearest_valid_size
+from src.conf import TrainConfig, InferenceConfig
+from src.datamodule.seg import (
+    TestDataset,
+    load_features,
+    load_chunk_features,
+    nearest_valid_size,
+)
 from src.models.common import get_model
 from src.utils.common import trace
 from src.utils.post_process import post_process_for_seg
 
-def load_model(cfg: InferenceConfig) -> nn.Module:
-    num_timesteps = nearest_valid_size(
-        int(cfg.duration * cfg.upsample_rate), cfg.downsample_rate
-    )
+
+def load_model(
+    cfg: InferenceConfig,
+) -> nn.Module:
     model = get_model(
-        cfg,
-        feature_dim=len(cfg.features),
-        n_classes=len(cfg.labels),
-        num_timesteps=num_timesteps // cfg.downsample_rate,
-        test=True,
+        cfg.train_config,
+        feature_dim=len(cfg.train_config.features),
+        n_classes=len(cfg.train_config.labels),
     )
 
     # load weights
-    if cfg.weight is not None:
-        weight_path = (
-            Path(cfg.dir.model_dir)
-            / cfg.weight.exp_name
-            / cfg.weight.run_name
-            / "best_model.pth"
-        )
-        model.load_state_dict(torch.load(weight_path))
-        print('load weight from "{}"'.format(weight_path))
+    weight_path = (
+        Path(cfg.dir.model_dir)
+        / cfg.weight.exp_name
+        / cfg.weight.run_name
+        / "best_model.pth"
+    )
+    model.load_state_dict(torch.load(weight_path))
+    print('load weight from "{}"'.format(weight_path))
     return model
 
 
@@ -72,23 +74,19 @@ def get_test_dataloader(cfg: InferenceConfig) -> DataLoader:
 
 
 def inference(
-    duration: int, loader: DataLoader, model: nn.Module, device: torch.device, use_amp
+    loader: DataLoader,
+    model: nn.Module,
+    device: torch.device,
 ) -> tuple[list[str], np.ndarray]:
-    model = model.to(device)
     model.eval()
 
-    preds = []
     keys = []
+    preds = []
     for batch in tqdm(loader, desc="inference"):
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                x = batch["feature"].to(device)
-                pred = model(x)["logits"].sigmoid()
-                pred = resize(
-                    pred.detach().cpu(),
-                    size=[duration, pred.shape[2]],
-                    antialias=False,
-                )
+            x = batch["feature"].to(device)
+            pred = model(x)
+            pred = pred.argmax(dim=1)
             key = batch["key"]
             preds.append(pred.detach().cpu().numpy())
             keys.extend(key)

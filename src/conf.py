@@ -147,3 +147,4 @@ class InferenceConfig:
     weight: WeightConfig
     aug: AugmentationConfig
     pp: PostProcessConfig
+    train_config: TrainConfig

@@ -17,11 +17,14 @@ class PrecTimeModel(nn.Module):
     ):
         super().__init__()
         self.n_classes = n_classes
-        self.feature_extractor = CNNextractor(in_channels=in_channels)
+        base_filters = 256
+        self.feature_extractor = CNNextractor(
+            in_channels=in_channels, base_filters=base_filters
+        )
         # self.context_extractor = ContextEncoder(
         #    input_size=cfg.window_size * 128,
         # )
-        self.fc = nn.Linear(cfg.window_size * 128, 1)
+        self.fc = nn.Linear(cfg.window_size * base_filters, n_classes)
         self.sigmoid = nn.Sigmoid()
 
     def forward(

@@ -25,7 +25,6 @@ class PrecTime(LightningModule):
         cfg: TrainConfig,
         feature_dim: int,
         num_classes: int,
-        class_weights: Optional[list[float]] = None,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -41,13 +40,6 @@ class PrecTime(LightningModule):
         # this is done with one hot encoding the label
         # and assigning a weight to each class
         # see https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html#torch.nn.BCEWithLogitsLoss
-
-        if class_weights:
-            self.loss_fn = nn.BCEWithLogitsLoss(
-                pos_weight=torch.tensor(class_weights)
-            )
-        else:
-            self.loss_fn = nn.BCEWithLogitsLoss()
         self.training_step_outputs = {"preds": [], "labels": []}
         self.validation_step_outputs = {"preds": [], "labels": []}
 
@@ -55,11 +47,7 @@ class PrecTime(LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        output = self.model(
-            batch["feature"].float(),
-        )
-        predictions: torch.Tensor = output["predictions"]
-        loss = self.loss_fn(predictions, batch["sparse_label"].float())
+        loss, predictions = self.loss_caclulation(batch)
         self.log_dict(
             {
                 "train_loss": loss.detach().item(),
@@ -69,18 +57,14 @@ class PrecTime(LightningModule):
             logger=True,
             prog_bar=True,
         )
-        self.training_step_outputs["preds"].append(predictions)
+        self.training_step_outputs["preds"].append(predictions.argmax(dim=1))
         self.training_step_outputs["labels"].append(
             batch["sparse_label"].float()
         )
         return loss
 
     def validation_step(self, batch, batch_idx):
-        output = self.model(
-            batch["feature"].float(),
-        )
-        predictions: torch.Tensor = output["predictions"]
-        loss = self.loss_fn(predictions, batch["sparse_label"].float())
+        loss, predictions = self.loss_caclulation(batch)
         self.log_dict(
             {
                 "val_loss": loss.detach().item(),
@@ -91,7 +75,7 @@ class PrecTime(LightningModule):
             prog_bar=True,
         )
         self.validation_loss.append(loss.detach().item())
-        self.validation_step_outputs["preds"].append(predictions)
+        self.validation_step_outputs["preds"].append(predictions.argmax(dim=1))
         self.validation_step_outputs["labels"].append(
             batch["sparse_label"].float()
         )
@@ -100,6 +84,24 @@ class PrecTime(LightningModule):
         #    predictions.detach().cpu().numpy(),
         # )
         return loss
+
+    def loss_caclulation(
+        self, batch: dict
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        output = self.model(
+            batch["feature"].float(),
+        )
+        sparse_label = batch["sparse_label"].float()
+        # calculate class weights from sparse label
+        # weights = self.calculate_pos_weights(sparse_label)
+        predictions: torch.Tensor = output["predictions"]
+        # convert sparse label to one hot encoding
+        sparse_label = nn.functional.one_hot(
+            sparse_label.long(), num_classes=2
+        )
+        loss_fn = nn.BCEWithLogitsLoss()
+        loss = loss_fn(predictions, sparse_label.float())
+        return loss, predictions
 
     def on_train_epoch_end(self):
         all_preds = torch.cat(self.training_step_outputs["preds"])
@@ -143,6 +145,7 @@ class PrecTime(LightningModule):
             self.val_loss_non_improvement = 0
         else:
             self.val_loss_non_improvement += 1
+            best = False
 
         if (
             self.val_loss_non_improvement
@@ -188,3 +191,14 @@ class PrecTime(LightningModule):
             }
         )
         return round(pr, 4), round(re, 4), round(f1, 4), round(accuracy, 2), cm_df  # type: ignore
+
+    def calculate_pos_weights(self, labels: torch.Tensor) -> torch.Tensor:
+        classes, class_counts = torch.unique(labels, return_counts=True)
+        pos_weights = torch.ones_like(class_counts)
+        neg_counts = [len(labels) - pos_count for pos_count in class_counts]
+        for idx, (pos_count, neg_count) in enumerate(
+            zip(class_counts, neg_counts)
+        ):
+            pos_weights[idx] = neg_count / (pos_count + 1e-5)
+
+        return torch.as_tensor(pos_weights, dtype=torch.float)

@@ -79,18 +79,6 @@ def split_array_into_chunks(
     return chunks[:, :, :-1], dense_labels, sparse_labels
 
 
-# caclulate the number of positive and negative files in the training data
-# directory
-def calculate_class_weights(cfg: TrainConfig) -> list[float]:
-    train_data_dir = Path(cfg.dir.processed_dir) / "train"
-    train_data_files = [
-        train_file.name for train_file in train_data_dir.glob("*.pkl")
-    ]
-    pos_files = [file for file in train_data_files if "pos" in file.split("_")]
-    neg_files = [file for file in train_data_files if "neg" in file.split("_")]
-    return [len(neg_files), len(pos_files)]
-
-
 ###################
 # PRE-PROCESS TRAINING DATA FOR TRAINING AND VALIDATION
 ###################
@@ -185,7 +173,7 @@ class TrainDataset(Dataset):
         if cfg.subsample:
             # subsample the positive examples
             # get the ratio of pos to neg from the config
-            n = len(neg_files) - cfg.dataset.positive_to_negative_ratio * len(
+            n = cfg.dataset.positive_to_negative_ratio * len(
                 pos_files
             )
             neg_files = np.random.choice(neg_files, size=int(n), replace=False)
@@ -253,7 +241,7 @@ class PrecTimeDataModule(LightningDataModule):
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.cfg.dataset.batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
             drop_last=True,
