@@ -128,7 +128,7 @@ class TrainConfig:
 
 
 @dataclass
-class InferenceConfig:
+class InferenceConfig(TrainConfig):
     exp_name: str
     phase: str
     seed: int
@@ -147,4 +147,3 @@ class InferenceConfig:
     weight: WeightConfig
     aug: AugmentationConfig
     pp: PostProcessConfig
-    train_config: TrainConfig

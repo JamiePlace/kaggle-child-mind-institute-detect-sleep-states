@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from rich import print
 import hydra
 import numpy as np
 import polars as pl
@@ -26,9 +27,9 @@ def load_model(
     cfg: InferenceConfig,
 ) -> nn.Module:
     model = get_model(
-        cfg.train_config,
-        feature_dim=len(cfg.train_config.features),
-        n_classes=len(cfg.train_config.labels),
+        cfg,
+        feature_dim=len(cfg.features),
+        n_classes=len(cfg.labels),
     )
 
     # load weights
@@ -120,21 +121,21 @@ def main(cfg: InferenceConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with trace("inference"):
-        keys, preds = inference(
-            cfg.duration, test_dataloader, model, device, use_amp=cfg.use_amp
-        )
+        keys, preds = inference(test_dataloader, model, device)
 
-    with trace("make submission"):
-        sub_df = make_submission(
-            keys,
-            preds,
-            downsample_rate=cfg.downsample_rate,
-            score_th=cfg.pp.score_th,
-            distance=cfg.pp.distance,
-        )
-    with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
-        dir = Path(cfg.dir.sub_dir) / "submission.csv"
-        sub_df.write_csv(dir)  # type: ignore
+    print(keys)
+    print(preds)
+    # with trace("make submission"):
+    # sub_df = make_submission(
+    # keys,
+    # preds,
+    # downsample_rate=cfg.downsample_rate,
+    # score_th=cfg.pp.score_th,
+    # distance=cfg.pp.distance,
+    # )
+    # with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
+    # dir = Path(cfg.dir.sub_dir) / "submission.csv"
+    # sub_df.write_csv(dir)  # type: ignore
 
 
 if __name__ == "__main__":
