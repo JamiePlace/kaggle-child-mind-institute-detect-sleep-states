@@ -145,12 +145,13 @@ class PrecTime(LightningModule):
         all_labels = all_labels.detach().cpu().numpy()
 
         all_preds = all_preds.round()
-        pr, re, f1, ac, cm = self.calculate_metrics(
-            labels=all_labels, preds=all_preds
-        )
-        cm = cm.rename({"labels": "Train"})
-        print(f"Train: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}")
-        print(cm)
+        if self.current_epoch % 10 == 0:
+            pr, re, f1, ac, cm = self.calculate_metrics(
+                labels=all_labels, preds=all_preds
+            )
+            cm = cm.rename({"labels": "Train"})
+            print(f"Train: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}")
+            print(cm)
         self.training_step_outputs["dense_preds"].clear()
         self.training_step_outputs["sparse_preds"].clear()
         self.training_step_outputs["dense_labels"].clear()
@@ -166,14 +167,15 @@ class PrecTime(LightningModule):
         all_labels = all_labels.detach().cpu().numpy()
 
         all_preds = all_preds.round()
-        pr, re, f1, ac, cm = self.calculate_metrics(
-            labels=all_labels, preds=all_preds
-        )
-        cm = cm.rename({"labels": "Validation"})
-        print(
-            f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
-        )
-        print(cm)
+        if self.current_epoch % 10 == 0:
+            pr, re, f1, ac, cm = self.calculate_metrics(
+                labels=all_labels, preds=all_preds
+            )
+            cm = cm.rename({"labels": "Validation"})
+            print(
+                f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
+            )
+            print(cm)
 
         if loss < self.__best_loss:
             best = True

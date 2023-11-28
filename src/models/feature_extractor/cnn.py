@@ -205,7 +205,7 @@ class CNNrefinor(nn.Module):
             nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=1,
                 padding="same",
@@ -214,7 +214,7 @@ class CNNrefinor(nn.Module):
             nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=1,
                 padding="same",
