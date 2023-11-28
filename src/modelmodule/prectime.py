@@ -143,9 +143,9 @@ class PrecTime(LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        all_preds = torch.cat(self.training_step_outputs["preds"])
+        all_preds = torch.cat(self.training_step_outputs["dense_preds"])
         all_preds = all_preds.detach().cpu().numpy()
-        all_labels = torch.cat(self.training_step_outputs["labels"])
+        all_labels = torch.cat(self.training_step_outputs["dense_labels"])
         all_labels = all_labels.detach().cpu().numpy()
 
         all_preds = all_preds.round()
@@ -155,16 +155,18 @@ class PrecTime(LightningModule):
         cm = cm.rename({"labels": "Train"})
         print(f"Train: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}")
         print(cm)
-        self.training_step_outputs["preds"].clear()
-        self.training_step_outputs["labels"].clear()
+        self.training_step_outputs["dense_preds"].clear()
+        self.training_step_outputs["sparse_preds"].clear()
+        self.training_step_outputs["dense_labels"].clear()
+        self.training_step_outputs["sparse_labels"].clear()
 
     def on_validation_epoch_end(self):
         best = False
         loss = np.array(self.validation_loss).mean()
 
-        all_preds = torch.cat(self.validation_step_outputs["preds"])
+        all_preds = torch.cat(self.validation_step_outputs["dense_preds"])
         all_preds = all_preds.detach().cpu().numpy()
-        all_labels = torch.cat(self.validation_step_outputs["labels"])
+        all_labels = torch.cat(self.validation_step_outputs["dense_labels"])
         all_labels = all_labels.detach().cpu().numpy()
 
         all_preds = all_preds.round()
@@ -192,8 +194,10 @@ class PrecTime(LightningModule):
         ):
             self.model.load_state_dict(torch.load("best_model.pth"))
             self.val_loss_non_improvement = 0
-        self.validation_step_outputs["preds"].clear()
-        self.validation_step_outputs["labels"].clear()
+        self.validation_step_outputs["dense_preds"].clear()
+        self.validation_step_outputs["sparse_preds"].clear()
+        self.validation_step_outputs["dense_labels"].clear()
+        self.validation_step_outputs["sparse_labels"].clear()
 
         if best:
             print(f"Saved best model {self.__best_loss} -> {loss}")
