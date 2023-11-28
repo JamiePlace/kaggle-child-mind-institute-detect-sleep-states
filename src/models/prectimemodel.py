@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from src.models.feature_extractor.cnn import CNNextractor
+from src.models.feature_extractor.cnn import CNNextractor, CNNrefinor
 from src.models.encoder.context import ContextEncoder
 from src.conf import TrainConfig
 
@@ -24,8 +24,15 @@ class PrecTimeModel(nn.Module):
         # self.context_extractor = ContextEncoder(
         #    input_size=cfg.window_size * 128,
         # )
-        self.fc = nn.Linear(cfg.window_size * base_filters, n_classes)
-        self.sigmoid = nn.Sigmoid()
+        self.prediction_refinor = CNNrefinor(
+            in_channels=base_filters, base_filters=base_filters
+        )
+        self.fc_sparse = nn.Linear(cfg.window_size * base_filters, n_classes)
+        self.fc_dense = nn.Linear(
+            cfg.window_size * base_filters, cfg.window_size
+        )
+        self.sigmoid_sparse = nn.Sigmoid()
+        self.sigmoid_dense = nn.Sigmoid()
 
     def forward(
         self,
@@ -39,12 +46,16 @@ class PrecTimeModel(nn.Module):
         Returns:
             dict[str, torch.Tensor]: logits (batch_size, n_timesteps, n_classes)
         """
-        x, _ = self.feature_extractor(x)
+        x1, x2 = self.feature_extractor(x)
         # x = self.context_extractor(x)
-        inter_window_context = x
-        x = self.fc(x)
-        x = self.sigmoid(x)
+        inter_window_context = x1
+        x1 = self.fc_sparse(x1)
+        sparse_prediction = self.sigmoid_sparse(x1)
+
+        x2 = self.prediction_refinor(x2)
+        x2 = self.fc_dense(x2)
+        dense_prediction = self.sigmoid_dense(x2)
         return {
-            "inter_window_context": inter_window_context,
-            "predictions": x.squeeze(),
+            "sparse_predictions": sparse_prediction.squeeze(),
+            "dense_predictions": dense_prediction.squeeze(),
         }

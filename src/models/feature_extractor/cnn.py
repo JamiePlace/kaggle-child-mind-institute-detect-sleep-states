@@ -190,3 +190,49 @@ class CNNextractor(nn.Module):
         return torch.cat([out_left, out_right], dim=2).view(
             (x.shape[0], -1)
         ), torch.cat([out_left, out_right], dim=2)
+
+
+class CNNrefinor(nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 256,
+        base_filters: int = 256,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        dropout = 0.5
+        dilation = 1
+        self.conv = nn.Sequential(
+            nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=1,
+                padding="same",
+            ),
+            nn.Upsample(scale_factor=2, mode="linear"),
+            nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=base_filters,
+                kernel_size=5,
+                stride=1,
+                dilation=1,
+                padding="same",
+            ),
+            nn.Dropout(p=dropout),
+        )
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass of the model.
+
+        Args:
+            x torch.Tensor: (batch_size, window_size, n_features)
+
+        Returns:
+            Tuple[Tensor, Tensor]: (some number), (batch_size, base_filters, some number)
+        """
+        return self.conv(x)

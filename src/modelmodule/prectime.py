@@ -36,18 +36,24 @@ class PrecTime(LightningModule):
         self.validation_loss = []
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
-        # TODO - implement weighted loss
-        # this is done with one hot encoding the label
-        # and assigning a weight to each class
-        # see https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html#torch.nn.BCEWithLogitsLoss
-        self.training_step_outputs = {"preds": [], "labels": []}
-        self.validation_step_outputs = {"preds": [], "labels": []}
+        self.training_step_outputs = {
+            "sparse_preds": [],
+            "sparse_labels": [],
+            "dense_preds": [],
+            "dense_labels": [],
+        }
+        self.validation_step_outputs = {
+            "sparse_preds": [],
+            "sparse_labels": [],
+            "dense_preds": [],
+            "dense_labels": [],
+        }
 
     def forward(self, x: torch.Tensor) -> dict[str, Optional[torch.Tensor]]:
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        loss, predictions = self.loss_caclulation(batch)
+        loss, sparse_preds, dense_preds = self.loss_caclulation(batch)
         self.log_dict(
             {
                 "train_loss": loss.detach().item(),
@@ -57,14 +63,22 @@ class PrecTime(LightningModule):
             logger=True,
             prog_bar=True,
         )
-        self.training_step_outputs["preds"].append(predictions.argmax(dim=1))
-        self.training_step_outputs["labels"].append(
+        self.training_step_outputs["sparse_preds"].append(
+            sparse_preds.argmax(dim=1)
+        )
+        self.training_step_outputs["dense_preds"].append(
+            dense_preds.argmax(dim=1)
+        )
+        self.training_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
+        )
+        self.training_step_outputs["dense_labels"].append(
+            batch["dense_labels"].float()
         )
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, predictions = self.loss_caclulation(batch)
+        loss, sparse_preds, dense_preds = self.loss_caclulation(batch)
         self.log_dict(
             {
                 "val_loss": loss.detach().item(),
@@ -74,34 +88,59 @@ class PrecTime(LightningModule):
             logger=True,
             prog_bar=True,
         )
-        self.validation_loss.append(loss.detach().item())
-        self.validation_step_outputs["preds"].append(predictions.argmax(dim=1))
-        self.validation_step_outputs["labels"].append(
+        self.validation_step_outputs["sparse_preds"].append(
+            sparse_preds.argmax(dim=1)
+        )
+        self.validation_step_outputs["dense_preds"].append(
+            dense_preds.argmax(dim=1)
+        )
+        self.validation_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
         )
-        # pr, re, f1 = self.calculate_metrics(
-        #    batch["sparse_label"].cpu().numpy(),
-        #    predictions.detach().cpu().numpy(),
-        # )
+        self.validation_step_outputs["dense_labels"].append(
+            batch["dense_labels"].float()
+        )
         return loss
 
     def loss_caclulation(
         self, batch: dict
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         output = self.model(
             batch["feature"].float(),
         )
+        dense_predictions: torch.Tensor = output["dense_predictions"]
+        dense_label = batch["dense_label"].float()
+        loss_dense = self.dense_loss_calculation(
+            dense_label, dense_predictions
+        )
+        sparse_predictions: torch.Tensor = output["sparse_predictions"]
         sparse_label = batch["sparse_label"].float()
-        # calculate class weights from sparse label
-        # weights = self.calculate_pos_weights(sparse_label)
-        predictions: torch.Tensor = output["predictions"]
+        loss_sparse = self.sparse_loss_calculation(
+            sparse_label, sparse_predictions
+        )
+
+        return loss_sparse + loss_dense, sparse_predictions, dense_predictions
+
+    def sparse_loss_calculation(
+        self, sparse_label: torch.Tensor, sparse_predictions: torch.Tensor
+    ) -> torch.Tensor:
         # convert sparse label to one hot encoding
         sparse_label = nn.functional.one_hot(
             sparse_label.long(), num_classes=2
         )
         loss_fn = nn.BCEWithLogitsLoss()
-        loss = loss_fn(predictions, sparse_label.float())
-        return loss, predictions
+        loss = loss_fn(sparse_predictions, sparse_label.float())
+        return loss
+
+    def dense_loss_calculation(
+        self, dense_label: torch.Tensor, dense_predictions: torch.Tensor
+    ) -> torch.Tensor:
+        dense_label = nn.functional.one_hot(dense_label.long(), num_classes=2)
+        other_dim = 1 - dense_predictions
+        dense_predictions = torch.stack([other_dim, dense_predictions], dim=2)
+        loss_fn = nn.BCEWithLogitsLoss()
+        loss = loss_fn(dense_predictions, dense_label.float())
+        return loss
 
     def on_train_epoch_end(self):
         all_preds = torch.cat(self.training_step_outputs["preds"])
