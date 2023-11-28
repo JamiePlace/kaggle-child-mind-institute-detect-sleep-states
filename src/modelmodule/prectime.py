@@ -66,14 +66,12 @@ class PrecTime(LightningModule):
         self.training_step_outputs["sparse_preds"].append(
             sparse_preds.argmax(dim=1)
         )
-        self.training_step_outputs["dense_preds"].append(
-            dense_preds.argmax(dim=1)
-        )
+        self.training_step_outputs["dense_preds"].append(dense_preds.flatten())
         self.training_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
         )
         self.training_step_outputs["dense_labels"].append(
-            batch["dense_label"].float()
+            batch["dense_label"].flatten().float()
         )
         return loss
 
@@ -92,14 +90,15 @@ class PrecTime(LightningModule):
             sparse_preds.argmax(dim=1)
         )
         self.validation_step_outputs["dense_preds"].append(
-            dense_preds.argmax(dim=1)
+            dense_preds.flatten()
         )
         self.validation_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
         )
         self.validation_step_outputs["dense_labels"].append(
-            batch["dense_label"].float()
+            batch["dense_label"].flatten().float()
         )
+        self.validation_loss.append(loss.detach().item())
         return loss
 
     def loss_caclulation(
@@ -135,9 +134,6 @@ class PrecTime(LightningModule):
     def dense_loss_calculation(
         self, dense_label: torch.Tensor, dense_predictions: torch.Tensor
     ) -> torch.Tensor:
-        dense_label = nn.functional.one_hot(dense_label.long(), num_classes=2)
-        other_dim = 1 - dense_predictions
-        dense_predictions = torch.stack([other_dim, dense_predictions], dim=2)
         loss_fn = nn.BCEWithLogitsLoss()
         loss = loss_fn(dense_predictions, dense_label.float())
         return loss
@@ -198,6 +194,7 @@ class PrecTime(LightningModule):
         self.validation_step_outputs["sparse_preds"].clear()
         self.validation_step_outputs["dense_labels"].clear()
         self.validation_step_outputs["sparse_labels"].clear()
+        self.validation_loss.clear()
 
         if best:
             print(f"Saved best model {self.__best_loss} -> {loss}")
