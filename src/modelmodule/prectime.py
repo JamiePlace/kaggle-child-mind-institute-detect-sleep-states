@@ -54,7 +54,6 @@ class PrecTime(LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, sparse_preds, dense_preds = self.loss_caclulation(batch)
-        print(batch.keys())
         self.log_dict(
             {
                 "train_loss": loss.detach().item(),
