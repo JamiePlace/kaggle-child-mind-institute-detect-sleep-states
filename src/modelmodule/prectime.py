@@ -203,17 +203,18 @@ class PrecTime(LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
-        # scheduler = get_polynomial_decay_schedule_with_warmup(
-        #    optimizer,
-        #    num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
-        #    num_training_steps=self.trainer.max_steps,
-        #    power=self.cfg.scheduler.power,
-        # )
-        scheduler = get_cosine_schedule_with_warmup(
+        scheduler = get_polynomial_decay_schedule_with_warmup(
             optimizer,
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
             num_training_steps=self.trainer.max_steps,
+            power=self.cfg.scheduler.power,
+            lr_end=5e-6,
         )
+        # scheduler = get_cosine_schedule_with_warmup(
+        # optimizer,
+        # num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
+        # num_training_steps=self.trainer.max_steps,
+        # )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     @staticmethod
