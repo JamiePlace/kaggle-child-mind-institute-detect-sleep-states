@@ -139,13 +139,13 @@ class PrecTime(LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        all_preds = torch.cat(self.training_step_outputs["dense_preds"])
-        all_preds = all_preds.detach().cpu().numpy()
-        all_labels = torch.cat(self.training_step_outputs["dense_labels"])
-        all_labels = all_labels.detach().cpu().numpy()
-
-        all_preds = all_preds.round()
         if self.current_epoch % 10 == 0:
+            all_preds = torch.cat(self.training_step_outputs["dense_preds"])
+            all_preds = all_preds.detach().cpu().numpy()
+            all_labels = torch.cat(self.training_step_outputs["dense_labels"])
+            all_labels = all_labels.detach().cpu().numpy()
+
+            all_preds = all_preds.round()
             pr, re, f1, ac, cm = self.calculate_metrics(
                 labels=all_labels, preds=all_preds
             )
@@ -161,13 +161,15 @@ class PrecTime(LightningModule):
         best = False
         loss = np.array(self.validation_loss).mean()
 
-        all_preds = torch.cat(self.validation_step_outputs["dense_preds"])
-        all_preds = all_preds.detach().cpu().numpy()
-        all_labels = torch.cat(self.validation_step_outputs["dense_labels"])
-        all_labels = all_labels.detach().cpu().numpy()
-
-        all_preds = all_preds.round()
         if self.current_epoch % 10 == 0:
+            all_preds = torch.cat(self.validation_step_outputs["dense_preds"])
+            all_preds = all_preds.detach().cpu().numpy()
+            all_labels = torch.cat(
+                self.validation_step_outputs["dense_labels"]
+            )
+            all_labels = all_labels.detach().cpu().numpy()
+
+            all_preds = all_preds.round()
             pr, re, f1, ac, cm = self.calculate_metrics(
                 labels=all_labels, preds=all_preds
             )
