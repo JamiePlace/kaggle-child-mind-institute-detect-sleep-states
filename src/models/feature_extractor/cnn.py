@@ -201,7 +201,6 @@ class CNNrefinor(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         dropout = 0.5
-        dilation = 1
         self.conv = nn.Sequential(
             nn.Conv1d(
                 in_channels=in_channels,

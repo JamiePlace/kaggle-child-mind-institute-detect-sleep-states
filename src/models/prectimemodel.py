@@ -17,7 +17,7 @@ class PrecTimeModel(nn.Module):
     ):
         super().__init__()
         self.n_classes = n_classes
-        base_filters = 256
+        base_filters = 128
         self.feature_extractor = CNNextractor(
             in_channels=in_channels, base_filters=base_filters
         )
@@ -29,7 +29,7 @@ class PrecTimeModel(nn.Module):
         )
         self.fc_sparse = nn.Linear(cfg.window_size * base_filters, n_classes)
         self.fc_dense = nn.Linear(
-            cfg.window_size * base_filters, cfg.window_size
+            cfg.window_size * base_filters * 2, cfg.window_size
         )
         self.sigmoid_sparse = nn.Sigmoid()
         self.sigmoid_dense = nn.Sigmoid()
@@ -53,6 +53,7 @@ class PrecTimeModel(nn.Module):
         sparse_prediction = self.sigmoid_sparse(x1)
 
         x2 = self.prediction_refinor(x2)
+        x2 = torch.flatten(x2, start_dim=1)
         x2 = self.fc_dense(x2)
         dense_prediction = self.sigmoid_dense(x2)
         return {
