@@ -14,7 +14,7 @@
             "args": [
                 "dir=local",
                 "num_workers=1",
-                "exp_name=context_window_005",
+                "exp_name=full_model_001",
                 "batch_size=32",
             ]
         },

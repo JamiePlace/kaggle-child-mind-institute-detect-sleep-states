@@ -19,7 +19,7 @@ from src.datamodule.prectime import (
 )
 from src.models.common import get_model
 from src.utils.common import trace
-from src.utils.post_process import post_process_for_seg
+from src.utils.post_process import post_process_for_prec
 
 
 def load_model(
@@ -79,8 +79,8 @@ def inference(
             with torch.cuda.amp.autocast(enabled=True):  # type: ignore
                 x = batch["feature"].half().to(device)
                 model_output = model(x)
-                prediction = model_output["predictions"]
-                prediction = prediction.argmax(dim=1)
+                prediction = model_output["dense_predictions"]
+                prediction = prediction.flatten()
                 key = batch["key"]
                 preds.append(prediction.detach().cpu().numpy())
                 keys.extend(key)
@@ -88,15 +88,8 @@ def inference(
     return keys, preds  # type: ignore
 
 
-def make_submission(
-    keys: list[str], preds: np.ndarray, downsample_rate, score_th, distance
-) -> pl.DataFrame:
-    sub_df = post_process_for_seg(
-        keys,
-        preds[:, :, [1, 2]],  # type: ignore
-        score_th=score_th,
-        distance=distance,  # type: ignore
-    )
+def make_submission(keys: list[str], preds: list[np.ndarray]) -> pl.DataFrame:
+    sub_df = post_process_for_prec(keys, preds)
 
     return sub_df
 
@@ -112,9 +105,6 @@ def main(cfg: InferenceConfig):
 
     with trace("inference"):
         keys, preds = inference(test_dataloader, model, device)
-    preds = np.concatenate(preds)
-    # cut off preds of padded chunk
-
     grouped_preds = {}
     with trace("grouping predctions"):
         # for each key there will be 1 prediction
@@ -127,31 +117,19 @@ def main(cfg: InferenceConfig):
                 grouped_preds[key].append(preds[i])
     with trace("resizing predictions"):
         for key in grouped_preds.keys():
-            original_length = len(grouped_preds[key])
-            grouped_preds[key] = grouped_preds[key][
-                : test_dataloader.dataset.series_length[key]  # type: ignore
-            ]
-            print(
-                f"key: {key}, "
-                f"original length: {original_length}, "
-                f"new length: {len(grouped_preds[key])}"
-            )
+            grouped_preds[key] = np.concatenate(grouped_preds[key])
 
     with trace("saving predictions"):
         with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
             pickle.dump(grouped_preds, f)
 
-    # with trace("make submission"):
-    # sub_df = make_submission(
-    # keys,
-    # preds,
-    # downsample_rate=cfg.downsample_rate,
-    # score_th=cfg.pp.score_th,
-    # distance=cfg.pp.distance,
-    # )
-    # with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
-    # dir = Path(cfg.dir.sub_dir) / "submission.csv"
-    # sub_df.write_csv(dir)  # type: ignore
+    with trace("make submission"):
+        keys = list(grouped_preds.keys())
+        preds = list(grouped_preds.values())
+        sub_df = make_submission(keys, preds)
+    with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
+        dir = Path(cfg.dir.sub_dir) / "submission.csv"
+        sub_df.write_csv(dir)  # type: ignore
 
 
 if __name__ == "__main__":

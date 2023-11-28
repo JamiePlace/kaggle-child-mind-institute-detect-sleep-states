@@ -61,3 +61,66 @@ def post_process_for_seg(
         ["row_id", "series_id", "step", "event", "score"]
     )
     return sub_df
+
+
+def post_process_for_prec(
+    keys: list[str],
+    preds: list[np.ndarray],
+) -> pl.DataFrame:
+    """make submission dataframe for segmentation task
+
+    Args:
+        keys (list[str]): list of keys. key is "{series_id}_{chunk_id}"
+        preds (np.ndarray):
+        score_th (float, optional): threshold for score. Defaults to 0.5.
+
+    Returns:
+        pl.DataFrame: submission dataframe
+    """
+    series_ids = keys
+    unique_series_ids = np.unique(series_ids)
+
+    records = []
+    for series_id in unique_series_ids:
+        series_idx = np.where(series_ids == series_id)[0]
+        this_series_preds = preds[series_idx]
+        this_series_preds_round = np.round(this_series_preds)
+        this_series_preds_diff = np.diff(this_series_preds_round)
+        # onset is when diff is 1 (index + 1)
+        # wakeup is when diff is -1 (index + 1)
+        onset_steps = np.where(this_series_preds_diff == 1)[0] + 1
+        wakeup_stes = np.where(this_series_preds_diff == -1)[0] + 1
+
+        for i, event_name in enumerate(["onset", "wakeup"]):
+            if event_name == "onset":
+                steps = onset_steps
+            else:
+                steps = wakeup_stes
+            scores = this_series_preds[steps]
+
+            for step, score in zip(steps, scores):
+                records.append(
+                    {
+                        "series_id": series_id,
+                        "step": step,
+                        "event": event_name,
+                        "score": score,
+                    }
+                )
+
+    if len(records) == 0:
+        records.append(
+            {
+                "series_id": series_ids[0],
+                "step": 0,
+                "event": "onset",
+                "score": 0,
+            }
+        )
+
+    sub_df = pl.DataFrame(records).sort(by=["series_id", "step"])
+    row_ids = pl.Series(name="row_id", values=np.arange(len(sub_df)))
+    sub_df = sub_df.with_columns(row_ids).select(
+        ["row_id", "series_id", "step", "event", "score"]
+    )
+    return sub_df
