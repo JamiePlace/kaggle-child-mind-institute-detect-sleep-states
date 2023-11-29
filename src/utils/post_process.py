@@ -187,9 +187,6 @@ def post_process_for_prec(
     sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
         lambda x: merge_short_events(x, cfg.event_threshold)
     )
-    sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
-        lambda x: drop_short_events(x, cfg.duration_threshold)
-    )
     sub_df = sub_df.sort(by=["series_id", "step"])
     row_ids = pl.Series(name="row_id", values=np.arange(len(sub_df)))
     sub_df = (
