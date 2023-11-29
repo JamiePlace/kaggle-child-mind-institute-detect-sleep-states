@@ -17,6 +17,21 @@ def shift(arr, num, fill_value=np.nan):
     return result
 
 
+def truncate_preds(preds: np.ndarray, series_length: int) -> np.ndarray:
+    """truncate preds to series_length
+
+    Args:
+        preds (np.ndarray): [description]
+        series_length (int): [description]
+
+    Returns:
+        np.ndarray: [description]
+    """
+    if len(preds) > series_length:
+        preds = preds[:series_length]
+    return preds
+
+
 def fill_in_gaps(preds: np.ndarray, n=1) -> np.ndarray:
     shifted_pos_1_preds = shift(preds, 1, fill_value=0)
     shifted_neg_1_preds = shift(preds, -1, fill_value=0)
@@ -42,9 +57,8 @@ def fill_in_gaps(preds: np.ndarray, n=1) -> np.ndarray:
 def merge_short_events(
     event_df: pl.DataFrame, threshold: int = 1000
 ) -> pl.DataFrame:
-    group = np.arange(len(event_df) // 2)
-    group = np.repeat(group, 2)
-    event_df = event_df.with_columns(pl.Series(name="group", values=group))
+    if "wakeup" not in event_df["event"] or "onset" not in event_df["event"]:
+        return event_df
     wakeup_event_diff = event_df.filter(
         pl.col("event") == "wakeup"
     ).with_columns(step_diff=(pl.col("step").diff()))
@@ -83,10 +97,13 @@ def merge_short_events(
     merged_df = real_onsets.vstack(
         real_wakeups.select(["series_id", "step", "event", "score", "group"])
     )
+    print(merged_df.shape)
     return merged_df
 
 
 def drop_short_events(event_df: pl.DataFrame, threshold=1000) -> pl.DataFrame:
+    if "wakeup" not in event_df["event"] or "onset" not in event_df["event"]:
+        return event_df
     grouped_df = (
         event_df.group_by("group", maintain_order=True)
         .agg(
@@ -103,6 +120,7 @@ def drop_short_events(event_df: pl.DataFrame, threshold=1000) -> pl.DataFrame:
 def post_process_for_prec(
     cfg: InferenceConfig,
     preds: dict[str, np.ndarray],
+    series_length: dict[str, int],
 ) -> pl.DataFrame:
     """make submission dataframe for segmentation task
 
@@ -119,6 +137,9 @@ def post_process_for_prec(
     records = []
     for series_id in series_ids:
         this_series_preds = np.array(preds[series_id])
+        this_series_preds = truncate_preds(
+            this_series_preds, series_length[series_id]
+        )
         this_series_preds = fill_in_gaps(this_series_preds, 1)
         this_series_preds_round = np.where(
             this_series_preds > cfg.prediction_threshold, 1, 0
@@ -157,11 +178,16 @@ def post_process_for_prec(
         )
 
     sub_df = pl.DataFrame(records).sort(by=["series_id", "step"])
+    group = np.arange(len(sub_df) // 2)
+    group = np.repeat(group, 2)
+    if len(sub_df) % 2 != 0:
+        group = np.append(group, group[-1] + 1)
+    sub_df = sub_df.with_columns(pl.Series(name="group", values=group))
     # sub_df = sub_df.to_pandas()
-    sub_df = sub_df.groupby("series_id").apply(
+    sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
         lambda x: merge_short_events(x, cfg.event_threshold)
     )
-    sub_df = sub_df.group_by("series_id").apply(
+    sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
         lambda x: drop_short_events(x, cfg.duration_threshold)
     )
     sub_df = sub_df.sort(by=["series_id", "step"])

@@ -14,10 +14,9 @@
             "args": [
                 "dir=local",
                 "num_workers=1",
-                "exp_name=full_model_001",
-                "batch_size=32",
-                "event_threshold=2000",
-                "duration_threshold=1000"
+                "exp_name=full_model_002",
+                "batch_size=64",
+                "prediction_threshold=0.5"
             ]
         },
         {

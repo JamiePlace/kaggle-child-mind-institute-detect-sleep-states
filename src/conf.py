@@ -141,7 +141,7 @@ class InferenceConfig(TrainConfig):
     series_ids: list[str]
     event_threshold: int
     duration_threshold: int
-    prediciton_threshold: float
+    prediction_threshold: float
 
 
 @dataclass

@@ -88,9 +88,11 @@ def inference(
 
 
 def make_submission(
-    cfg: InferenceConfig, preds: dict[str, np.ndarray]
+    cfg: InferenceConfig,
+    preds: dict[str, np.ndarray],
+    series_length: dict[str, int],
 ) -> pl.DataFrame:
-    sub_df = post_process_for_prec(cfg, preds)
+    sub_df = post_process_for_prec(cfg, preds, series_length)
 
     return sub_df
 
@@ -120,7 +122,8 @@ def main(cfg: InferenceConfig):
             pickle.dump(grouped_preds, f)
 
     with trace("make submission"):
-        sub_df = make_submission(cfg, grouped_preds)
+        series_length = test_dataloader.dataset.series_length  # type: ignore
+        sub_df = make_submission(cfg, grouped_preds, series_length)
     with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
         dir = Path(cfg.dir.sub_dir) / "submission.csv"
         sub_df.write_csv(dir)  # type: ignore

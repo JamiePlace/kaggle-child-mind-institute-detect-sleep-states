@@ -15,7 +15,6 @@ from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 from src.conf import TrainConfig
 from src.utils.metrics import event_detection_ap
-from src.utils.post_process import post_process_for_seg
 from src.models.prectimemodel import PrecTimeModel
 
 
