@@ -3,7 +3,10 @@ import numpy as np
 import pickle
 from pathlib import Path
 import hydra
+import polars as pl
+from rich import print
 
+from src.utils.metrics import event_detection_ap
 from src.conf import InferenceConfig
 
 
@@ -45,29 +48,43 @@ def expand_sparse_label(
     return expanded_label
 
 
+# finish calculating the score
+def calculate_score(cfg: InferenceConfig):
+    pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
+    event_df = (
+        pl.read_csv(Path(cfg.dir.data_dir) / "train_events.csv")
+        .drop_nulls()
+        .filter(pl.col("series_id").is_in(pred_df["series_id"].unique()))
+        .drop_nulls()
+    )
+    pred_df = pred_df.filter(pl.col("step") <= event_df["step"].max())
+    print(event_df)
+    print(pred_df)
+    score = event_detection_ap(event_df.to_pandas(), pred_df.to_pandas())
+    return score
+
+
 @hydra.main(config_path="conf", config_name="inference", version_base="1.2")
 def main(cfg: InferenceConfig):
-    print(cfg.series_ids)
-    # Load the data
-    with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "rb") as f:
-        data = pickle.load(f)
-    # Plot the data
-    sparse_preds = data[cfg.series_ids[0]]
-    sparse_label, dense_label, anglez, enmo = get_label(cfg)
-    sparse_preds = expand_sparse_label(cfg, sparse_preds, dense_label)
-    sparse_label = expand_sparse_label(cfg, sparse_label, dense_label)
-    print(len(dense_label), len(sparse_preds), len(sparse_label))
-    fig, ax = plt.subplots(4, 1)
-    ax[0].plot(anglez, label="AngleZ")
-    ax[1].plot(enmo, label="Enmo")
-    ax[2].plot(dense_label, label="Dense Label")
-    ax[3].plot(sparse_preds, label="Predicted")
-    ax[3].plot(sparse_label, label="Label")
-    ax[0].legend()
-    ax[1].legend()
-    ax[2].legend()
-    ax[3].legend()
-    plt.show()
+    score = calculate_score(cfg)
+    print(f"score: {score:.4f}")
+    # print(cfg.series_ids)
+    ## Load the data
+    # with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "rb") as f:
+    # data = pickle.load(f)
+    ## Plot the data
+    # dense_preds = data[cfg.series_ids[0]]
+    # sparse_label, dense_label, anglez, enmo = get_label(cfg)
+    # print(len(dense_label), len(dense_preds))
+    # fig, ax = plt.subplots(3, 1)
+    # ax[0].plot(anglez, label="AngleZ")
+    # ax[1].plot(enmo, label="Enmo")
+    # ax[2].plot(dense_label, label="Dense Label")
+    # ax[2].plot(dense_preds, label="Dense Preds")
+    # ax[0].legend()
+    # ax[1].legend()
+    # ax[2].legend()
+    # plt.show()
 
 
 if __name__ == "__main__":

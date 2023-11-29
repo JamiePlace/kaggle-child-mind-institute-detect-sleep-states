@@ -16,6 +16,8 @@
                 "num_workers=1",
                 "exp_name=full_model_001",
                 "batch_size=32",
+                "event_threshold=2000",
+                "duration_threshold=1000"
             ]
         },
         {

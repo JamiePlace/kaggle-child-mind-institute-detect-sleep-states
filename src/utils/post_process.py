@@ -1,6 +1,8 @@
 import numpy as np
 import polars as pl
 
+from src.conf import InferenceConfig
+
 
 def shift(arr, num, fill_value=np.nan):
     result = np.empty_like(arr)
@@ -37,35 +39,70 @@ def fill_in_gaps(preds: np.ndarray, n=1) -> np.ndarray:
     return preds
 
 
-def drop_short_events(
+def merge_short_events(
     event_df: pl.DataFrame, threshold: int = 1000
 ) -> pl.DataFrame:
     group = np.arange(len(event_df) // 2)
     group = np.repeat(group, 2)
     event_df = event_df.with_columns(pl.Series(name="group", values=group))
-    event_df = (
-        event_df.pivot(
-            index=["series_id", "group"],
-            columns=["event"],
-            values=["step"],
+    wakeup_event_diff = event_df.filter(
+        pl.col("event") == "wakeup"
+    ).with_columns(step_diff=(pl.col("step").diff()))
+    row_ids = pl.Series(
+        name="row_id", values=np.arange(len(wakeup_event_diff))
+    )
+    wakeup_event_diff = wakeup_event_diff.with_columns(row_ids)
+    # if the difference in steps is less than threshold make the next wakeup event the wakeup event for the previous onset event
+    new_groups = []
+    for i, row in enumerate(wakeup_event_diff.rows(named=True)):
+        if i == 0:
+            new_groups.append(row["group"])
+            continue
+        if row["step_diff"] < threshold:
+            previous_group = new_groups[-1]
+            new_groups.append(previous_group)
+        else:
+            new_groups.append(row["group"])
+
+    new_groups = pl.Series(name="group", values=new_groups)
+    wakeup_event_diff = wakeup_event_diff.with_columns(new_groups)
+    real_wakeups = wakeup_event_diff.group_by(
+        "group", maintain_order=True
+    ).agg(
+        pl.col("step").max().alias("step"),
+        pl.col("score").last().alias("score"),
+        pl.col("series_id").last().alias("series_id"),
+    )
+    real_wakeups = real_wakeups.with_columns(pl.lit("wakeup").alias("event"))
+    real_onsets = event_df.filter(
+        (pl.col("event") == "onset")
+        & (pl.col("group").is_in(real_wakeups["group"]))
+    )
+    # convert real_wakeups groups column to int32
+    real_wakeups = real_wakeups.with_columns(pl.col("group").cast(pl.Int32))
+    merged_df = real_onsets.vstack(
+        real_wakeups.select(["series_id", "step", "event", "score", "group"])
+    )
+    return merged_df
+
+
+def drop_short_events(event_df: pl.DataFrame, threshold=1000) -> pl.DataFrame:
+    grouped_df = (
+        event_df.group_by("group", maintain_order=True)
+        .agg(
+            (pl.col("step").last() - pl.col("step").first()).alias(
+                "step_diff"
+            ),
         )
-        .with_columns((pl.col("wakeup") - pl.col("onset")).alias("duration"))
-        .filter(pl.col("duration") > threshold)
+        .filter(pl.col("step_diff") >= threshold)
     )
-    # revert event_df to original format
-    event_df = event_df.melt(
-        id_vars=["series_id", "group"],
-        value_vars=["onset", "wakeup"],
-        variable_name="event",
-        value_name="step",
-    )
-    event_df = event_df.drop("group")
+    event_df = event_df.filter(pl.col("group").is_in(grouped_df["group"]))
     return event_df
 
 
 def post_process_for_prec(
+    cfg: InferenceConfig,
     preds: dict[str, np.ndarray],
-    threshold: float = 0.5,
 ) -> pl.DataFrame:
     """make submission dataframe for segmentation task
 
@@ -83,7 +120,9 @@ def post_process_for_prec(
     for series_id in series_ids:
         this_series_preds = np.array(preds[series_id])
         this_series_preds = fill_in_gaps(this_series_preds, 1)
-        this_series_preds_round = np.where(this_series_preds > threshold, 1, 0)
+        this_series_preds_round = np.where(
+            this_series_preds > cfg.prediction_threshold, 1, 0
+        )
         this_series_preds_diff = np.diff(this_series_preds_round)
         # onset is when diff is 1 (index + 1)
         # wakeup is when diff is -1 (index - 1)
@@ -118,12 +157,18 @@ def post_process_for_prec(
         )
 
     sub_df = pl.DataFrame(records).sort(by=["series_id", "step"])
-    filtered_sub_df = drop_short_events(sub_df, threshold=1000)
-    # drop the event column from sub_df
-    sub_df = sub_df.drop("event")
-    filtered_sub_df = filtered_sub_df.join(sub_df, on=["series_id", "step"])
-    row_ids = pl.Series(name="row_id", values=np.arange(len(filtered_sub_df)))
-    filtered_sub_df = filtered_sub_df.with_columns(row_ids).select(
-        ["row_id", "series_id", "step", "event", "score"]
-    ).sort(by=["series_id", "step"])
-    return filtered_sub_df
+    # sub_df = sub_df.to_pandas()
+    sub_df = sub_df.groupby("series_id").apply(
+        lambda x: merge_short_events(x, cfg.event_threshold)
+    )
+    sub_df = sub_df.group_by("series_id").apply(
+        lambda x: drop_short_events(x, cfg.duration_threshold)
+    )
+    sub_df = sub_df.sort(by=["series_id", "step"])
+    row_ids = pl.Series(name="row_id", values=np.arange(len(sub_df)))
+    sub_df = (
+        sub_df.with_columns(row_ids)
+        .select(["row_id", "series_id", "step", "event", "score"])
+        .sort(by=["series_id", "step"])
+    )
+    return sub_df

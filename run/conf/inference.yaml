@@ -39,4 +39,8 @@ features:
   - "hour_cos"
 
 series_ids:
-  - "4ac356361be9"
+  - !!null
+
+event_threshold: 360 # 30 minutes
+duration_threshold: 2160 # 3 hours
+prediction_threshold: 0.5

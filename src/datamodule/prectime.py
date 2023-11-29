@@ -182,7 +182,13 @@ def pre_process_for_inference(cfg: InferenceConfig):
     features_path = Path(cfg.dir.processed_dir)
     # load all of the features for all of the training data
     # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
-    all_series_ids = cfg.series_ids
+    if cfg.series_ids[0] is not None:
+        all_series_ids = cfg.series_ids
+    else:
+        all_series_ids = [
+            series_dir.name
+            for series_dir in (features_path / cfg.phase).glob("*")
+        ]
     features = load_features(
         feature_names=cfg.features,
         series_ids=all_series_ids,
@@ -247,17 +253,28 @@ class TrainDataset(Dataset):
         ]
         # TODO - if subsample is true then ensure that samples are taken in order from the files
         if cfg.subsample:
-            # subsample the positive examples
-            # get the ratio of pos to neg from the config
-            n = cfg.dataset.positive_to_negative_ratio * len(pos_files)
-            neg_files = np.random.choice(neg_files, size=int(n), replace=False)
-            self.train_data_files = list(pos_files) + list(neg_files)
-            subsample_size = int(
-                len(self.train_data_files) * cfg.subsample_rate
-            )
-            self.train_data_files = list(
-                np.random.choice(self.train_data_files, size=subsample_size)
-            )
+            if cfg.subsample_rate == 1:
+                self.train_data_files = list(
+                    np.random.choice(
+                        self.train_data_files, size=len(self.train_data_files)
+                    )
+                )
+            else:
+                # subsample the positive examples
+                # get the ratio of pos to neg from the config
+                n = cfg.dataset.positive_to_negative_ratio * len(pos_files)
+                neg_files = np.random.choice(
+                    neg_files, size=int(n), replace=False
+                )
+                self.train_data_files = list(pos_files) + list(neg_files)
+                subsample_size = int(
+                    len(self.train_data_files) * cfg.subsample_rate
+                )
+                self.train_data_files = list(
+                    np.random.choice(
+                        self.train_data_files, size=subsample_size
+                    )
+                )
 
     def __len__(self):
         return len(self.train_data_files)
@@ -315,7 +332,9 @@ class TestDataset(Dataset):
         self.valid_data_files = pickle.load(fileobj)
         fileobj.close()
         with open(
-            Path(cfg.dir.processed_dir) / "inference" / "__series_length__.pkl",
+            Path(cfg.dir.processed_dir)
+            / "inference"
+            / "__series_length__.pkl",
             "rb",
         ) as f:
             self.series_length = pickle.load(f)

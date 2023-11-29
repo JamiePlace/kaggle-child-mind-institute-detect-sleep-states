@@ -87,8 +87,10 @@ def inference(
     return keys, preds  # type: ignore
 
 
-def make_submission(preds: dict[str, np.ndarray]) -> pl.DataFrame:
-    sub_df = post_process_for_prec(preds)
+def make_submission(
+    cfg: InferenceConfig, preds: dict[str, np.ndarray]
+) -> pl.DataFrame:
+    sub_df = post_process_for_prec(cfg, preds)
 
     return sub_df
 
@@ -111,14 +113,14 @@ def main(cfg: InferenceConfig):
                 key = key_id.split("_")[0]
                 if key not in grouped_preds.keys():
                     grouped_preds[key] = []
-                grouped_preds[key] += pred_list[i][j,:].squeeze().tolist()
+                grouped_preds[key] += pred_list[i][j, :].squeeze().tolist()
 
     with trace("saving predictions"):
         with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
             pickle.dump(grouped_preds, f)
 
     with trace("make submission"):
-        sub_df = make_submission(grouped_preds)
+        sub_df = make_submission(cfg, grouped_preds)
     with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
         dir = Path(cfg.dir.sub_dir) / "submission.csv"
         sub_df.write_csv(dir)  # type: ignore

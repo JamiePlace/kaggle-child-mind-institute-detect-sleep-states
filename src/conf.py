@@ -139,6 +139,9 @@ class InferenceConfig(TrainConfig):
     aug: AugmentationConfig
     pp: PostProcessConfig
     series_ids: list[str]
+    event_threshold: int
+    duration_threshold: int
+    prediciton_threshold: float
 
 
 @dataclass
