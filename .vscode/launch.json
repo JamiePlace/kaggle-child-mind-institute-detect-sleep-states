@@ -36,19 +36,16 @@
             "name": "Python: Train",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "${workspaceFolder}/run/train.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
                 "exp_name=expdebug",
-                "dataset.batch_size=32",
+                "dataset.batch_size=128",
                 "dataset.num_workers=1",
-                "model=Spec2DCNN",
-                "trainer.check_val_every_n_epoch=1",
                 "trainer.debug=false",
-                "refresh_processed_data=true",
-                "duration=2880"
-
+                "refresh_processed_data=false",
+                "window_size=100",
             ]
         },
         {

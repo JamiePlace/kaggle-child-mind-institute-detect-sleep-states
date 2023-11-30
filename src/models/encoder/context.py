@@ -17,7 +17,7 @@ class ContextEncoder(nn.Module):
             num_layers=2,
             dropout=self.dropout,
             bidirectional=True,
-            batch_first=False,
+            batch_first=True,
         )
         self.relu = nn.ReLU()
 
@@ -37,9 +37,7 @@ class ContextEncoder(nn.Module):
         # (batch_size, seq_len, n_features)
         # we can do this by swapping the second and third dimensions
         # and declaring the first dimension is not the batch size
-        x = x.transpose(1, 2)
+        x = x.view(1, x.shape[0], x.shape[1])
         x, _ = self.lstm1(x)
         x = x.squeeze()
-        # extract the last output of the lstm
-        x = x[:, -1]
         return x

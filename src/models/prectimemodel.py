@@ -21,15 +21,23 @@ class PrecTimeModel(nn.Module):
         self.feature_extractor = CNNextractor(
             in_channels=in_channels, base_filters=base_filters
         )
-        # self.context_extractor = ContextEncoder(
-        #    input_size=cfg.window_size * 128,
-        # )
+        self.context_extractor = ContextEncoder(
+            input_size=cfg.window_size * 128,
+        )
+        if 200 > cfg.window_size:
+            self.upsample_or_downsample = nn.AdaptiveAvgPool1d(cfg.window_size)
+        else:
+            self.upsample_or_downsample = nn.Upsample(
+                size=(base_filters, cfg.window_size),
+                mode="bilinear",
+                align_corners=True,
+            )
         self.prediction_refinor = CNNrefinor(
-            in_channels=base_filters, base_filters=base_filters
+            in_channels=base_filters * 2, base_filters=base_filters * 2
         )
         self.fc_sparse = nn.Linear(cfg.window_size * base_filters, n_classes)
         self.fc_dense = nn.Linear(
-            cfg.window_size * base_filters * 2, cfg.window_size
+            cfg.window_size * base_filters * 2 * 4, cfg.window_size
         )
         self.sigmoid_sparse = nn.Sigmoid()
         self.sigmoid_dense = nn.Sigmoid()
@@ -46,18 +54,20 @@ class PrecTimeModel(nn.Module):
         Returns:
             dict[str, torch.Tensor]: logits (batch_size, n_timesteps, n_classes)
         """
-        if len(x.shape) == 4:
-            x = x.squeeze()
         x1, x2 = self.feature_extractor(x)
-        # x = self.context_extractor(x)
-        inter_window_context = x1
-        x1 = self.fc_sparse(x1)
-        sparse_prediction = self.sigmoid_sparse(x1)
-
-        x2 = self.prediction_refinor(x2)
-        x2 = torch.flatten(x2, start_dim=1)
-        x2 = self.fc_dense(x2)
-        dense_prediction = self.sigmoid_dense(x2)
+        sparse_fully_connected = self.fc_sparse(x1)
+        sparse_prediction = self.sigmoid_sparse(sparse_fully_connected)
+        x1 = self.context_extractor(x1)
+        x1 = self.upsample_or_downsample(x1)
+        new_x = torch.zeros(x1.shape[0], x2.shape[1] * 2, x2.shape[2] * 2).to(
+            x1.device
+        )
+        new_x[:, : x2.shape[1], : x2.shape[2]] = x2
+        new_x[:, x2.shape[1] :, x2.shape[2] :] = x1
+        new_x = self.prediction_refinor(new_x)
+        new_x = torch.flatten(new_x, start_dim=1)
+        new_x = self.fc_dense(new_x)
+        dense_prediction = self.sigmoid_dense(new_x)
         return {
             "sparse_predictions": sparse_prediction.squeeze(),
             "dense_predictions": dense_prediction.squeeze(),

@@ -103,6 +103,10 @@ class PrecTime(LightningModule):
     def loss_caclulation(
         self, batch: dict
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if len(batch["feature"].shape) == 4:
+            batch["feature"] = batch["feature"].squeeze()
+            batch["dense_label"] = batch["dense_label"].squeeze()
+            batch["sparse_label"] = batch["sparse_label"].squeeze()
         output = self.model(
             batch["feature"].float(),
         )
