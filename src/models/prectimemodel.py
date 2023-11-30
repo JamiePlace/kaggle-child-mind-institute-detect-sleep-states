@@ -35,7 +35,7 @@ class PrecTimeModel(nn.Module):
         self.prediction_refinor = CNNrefinor(
             in_channels=base_filters * 2, base_filters=base_filters * 2
         )
-        self.fc_sparse = nn.Linear(cfg.window_size * base_filters, n_classes)
+        self.fc_sparse = nn.Linear(100, n_classes)
         self.fc_dense = nn.Linear(
             cfg.window_size * base_filters * 2 * 4, cfg.window_size
         )
