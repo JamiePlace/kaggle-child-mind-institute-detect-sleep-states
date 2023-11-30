@@ -47,6 +47,6 @@ class ContextEncoder(nn.Module):
         # we can do this by swapping the second and third dimensions
         # and declaring the first dimension is not the batch size
         x = x.view(1, x.shape[0], x.shape[1])
-        x = self.lstm_stacked(x)
+        x, _ = self.lstm_stacked(x)
         x = x.squeeze()
         return x
