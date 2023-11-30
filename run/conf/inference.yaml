@@ -18,8 +18,8 @@ defaults:
 
 exp_name: dummy
 phase: test
-event_threshold: 360 # 30 minutes
-duration_threshold: 2160 # 3 hours
+event_threshold: 2160 # 3 hours
+duration_threshold: 360 # 30 minutes
 prediction_threshold: 0.5
 weight:
   exp_name: ${exp_name}

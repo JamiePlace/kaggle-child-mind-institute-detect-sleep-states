@@ -61,6 +61,11 @@ def merge_short_events(
 ) -> pl.DataFrame:
     if "wakeup" not in event_df["event"] or "onset" not in event_df["event"]:
         return event_df
+    group = np.arange(len(event_df) // 2)
+    group = np.repeat(group, 2)
+    if len(event_df) % 2 != 0:
+        group = np.append(group, group[-1] + 1)
+    event_df = event_df.with_columns(pl.Series(name="group", values=group))
     wakeup_event_diff = event_df.filter(
         pl.col("event") == "wakeup"
     ).with_columns(step_diff=(pl.col("step").diff()))
@@ -144,6 +149,12 @@ def merge_short_events(
 def drop_short_events(event_df: pl.DataFrame, threshold=1000) -> pl.DataFrame:
     if "wakeup" not in event_df["event"] or "onset" not in event_df["event"]:
         return event_df
+
+    group = np.arange(len(event_df) // 2)
+    group = np.repeat(group, 2)
+    if len(event_df) % 2 != 0:
+        group = np.append(group, group[-1] + 1)
+    event_df = event_df.with_columns(pl.Series(name="group", values=group))
     grouped_df = (
         event_df.group_by("group", maintain_order=True)
         .agg(
@@ -183,7 +194,7 @@ def post_process_for_prec(
         )
         this_series_preds_diff = np.diff(this_series_preds_round)
         # onset is when diff is 1 (index + 1)
-        # wakeup is when diff is -1 (index - 1)
+        # wakeup is when diff is -1 (index)
         onset_steps = np.where(this_series_preds_diff == 1)[0] + 1
         wakeup_steps = np.where(this_series_preds_diff == -1)[0]
 
@@ -215,14 +226,9 @@ def post_process_for_prec(
         )
 
     sub_df = pl.DataFrame(records).sort(by=["series_id", "step"])
-    group = np.arange(len(sub_df) // 2)
-    group = np.repeat(group, 2)
-    if len(sub_df) % 2 != 0:
-        group = np.append(group, group[-1] + 1)
-    sub_df = sub_df.with_columns(pl.Series(name="group", values=group))
     # sub_df = sub_df.to_pandas()
     sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
-        lambda x: merge_short_events(x, series_length, cfg.duration_threshold)
+       lambda x: merge_short_events(x, series_length, cfg.duration_threshold)
     )
     sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
         lambda x: drop_short_events(x, cfg.event_threshold)
