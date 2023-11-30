@@ -20,6 +20,19 @@
             ]
         },
         {
+            "name": "Python: Prepare Data",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/run/prepare_data.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "dir=local",
+                "batch_size=64",
+                "phase=train"
+            ]
+        },
+        {
             "name": "Python: Train",
             "type": "python",
             "request": "launch",

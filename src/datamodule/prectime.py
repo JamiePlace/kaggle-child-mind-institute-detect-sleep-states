@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning import LightningDataModule
 
-from src.conf import TrainConfig, InferenceConfig
+from src.conf import TrainConfig, InferenceConfig, PrepareDataConfig
 
 
 def load_features(
@@ -102,7 +102,7 @@ def truncate_features(
 ###################
 # PRE-PROCESS TRAINING DATA FOR TRAINING AND VALIDATION
 ###################
-def pre_process_for_training(cfg: TrainConfig):
+def pre_process_for_training(cfg: PrepareDataConfig):
     event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
     features_path = Path(cfg.dir.processed_dir)
     # load all of the features for all of the training data
@@ -122,6 +122,9 @@ def pre_process_for_training(cfg: TrainConfig):
         .drop_nulls()
     )
 
+    batched_data = np.empty(
+        (cfg.batch_size, cfg.window_size, len(cfg.features))
+    )
     output_path = Path(cfg.dir.processed_dir) / "train/"
     train_keys = []
     valid_keys = []
@@ -142,14 +145,55 @@ def pre_process_for_training(cfg: TrainConfig):
             cfg.window_size,
             phase="train",
         )
+        if series_chunks.shape[0] % cfg.batch_size != 0:
+            # pad the series_chunks with zeros
+            pad_size = cfg.batch_size - (
+                series_chunks.shape[0] % cfg.batch_size
+            )
+            series_chunks = np.concatenate(
+                (
+                    series_chunks,
+                    np.zeros(
+                        (
+                            pad_size,
+                            series_chunks.shape[1],
+                            series_chunks.shape[2],
+                        )
+                    ),
+                )
+            )
+            dense_labels = np.concatenate(
+                (
+                    dense_labels,
+                    np.zeros((pad_size, dense_labels.shape[1])),
+                )
+            )
+            sparse_labels = np.concatenate(
+                (
+                    sparse_labels,
+                    np.zeros((pad_size)),
+                )
+            )
+
+        batched_chunks = np.array_split(
+            series_chunks, series_chunks.shape[0] // cfg.batch_size
+        )
+
+        batched_dense_labels = np.array_split(
+            dense_labels, dense_labels.shape[0] // cfg.batch_size
+        )
+
+        batched_sparse_labels = np.array_split(
+            sparse_labels, sparse_labels.shape[0] // cfg.batch_size
+        )
+
         # for each chunk, save the chunk and the label
         for i, (chunk, dense_label, sparse_label) in enumerate(
-            zip(series_chunks, dense_labels, sparse_labels)
+            zip(batched_chunks, batched_dense_labels, batched_sparse_labels)
         ):
             # use sparse label in the file name so that we can easily filter
-            sparse_name = "pos" if sparse_label == 1 else "neg"
-            key = f"{series_id}_{sparse_name}_{i:07}"
-            file_name = f"{series_id}_{sparse_name}_{i:07}.pkl"
+            key = f"{series_id}_{i:07}"
+            file_name = f"{series_id}_{i:07}.pkl"
             fileobj = open(output_path / file_name, "wb")
             pickle.dump(
                 {
@@ -243,38 +287,6 @@ class TrainDataset(Dataset):
         fileobj = open(keys_file, "rb")
         self.train_data_files = pickle.load(fileobj)
         fileobj.close()
-        # filter the train_data_files to include a proportion of negative to positive examples
-        # extrac the positive examples and negative examples
-        pos_files = [
-            file for file in self.train_data_files if "pos" in file.split("_")
-        ]
-        neg_files = [
-            file for file in self.train_data_files if "neg" in file.split("_")
-        ]
-        # TODO - if subsample is true then ensure that samples are taken in order from the files
-        if cfg.subsample:
-            if cfg.subsample_rate == 1:
-                self.train_data_files = list(
-                    np.random.choice(
-                        self.train_data_files, size=len(self.train_data_files)
-                    )
-                )
-            else:
-                # subsample the positive examples
-                # get the ratio of pos to neg from the config
-                n = cfg.dataset.positive_to_negative_ratio * len(pos_files)
-                neg_files = np.random.choice(
-                    neg_files, size=int(n), replace=False
-                )
-                self.train_data_files = list(pos_files) + list(neg_files)
-                subsample_size = int(
-                    len(self.train_data_files) * cfg.subsample_rate
-                )
-                self.train_data_files = list(
-                    np.random.choice(
-                        self.train_data_files, size=subsample_size
-                    )
-                )
 
     def __len__(self):
         return len(self.train_data_files)
@@ -367,8 +379,8 @@ class PrecTimeDataModule(LightningDataModule):
         )
         train_loader = DataLoader(
             train_dataset,
-            batch_size=self.cfg.dataset.batch_size,
-            shuffle=True,
+            batch_size=1,
+            shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
             drop_last=True,

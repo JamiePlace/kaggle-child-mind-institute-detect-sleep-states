@@ -117,7 +117,11 @@ class PrecTime(LightningModule):
             sparse_label, sparse_predictions
         )
 
-        return loss_sparse + loss_dense, sparse_predictions, dense_predictions
+        return (
+            loss_sparse + (2 * loss_dense),
+            sparse_predictions,
+            dense_predictions,
+        )
 
     def sparse_loss_calculation(
         self, sparse_label: torch.Tensor, sparse_predictions: torch.Tensor
@@ -209,14 +213,14 @@ class PrecTime(LightningModule):
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
             num_training_steps=self.trainer.max_steps,
             power=self.cfg.scheduler.power,
-            lr_end=5e-6,
+            lr_end=0,
         )
         # scheduler = get_cosine_schedule_with_warmup(
         # optimizer,
         # num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
         # num_training_steps=self.trainer.max_steps,
         # )
-        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+        return [optimizer]  # , [{"scheduler": scheduler, "interval": "step"}]
 
     @staticmethod
     def calculate_metrics(
