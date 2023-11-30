@@ -36,7 +36,6 @@ class PrecTimeModel(nn.Module):
         self.prediction_refinor = CNNrefinor(
             cfg, in_channels=cfg.window_size * 2, base_filters=base_filters
         )
-        self.fc_sparse = nn.Linear(base_filters, n_classes)
         self.sigmoid_sparse = nn.Sigmoid()
         self.sigmoid_dense = nn.Sigmoid()
 
@@ -54,8 +53,7 @@ class PrecTimeModel(nn.Module):
         """
         x1, x2 = self.feature_extractor(x)
         x1 = self.context_extractor(x1)
-        sparse_prediction = self.fc_sparse(x1[:, -1])
-        sparse_prediction = self.sigmoid_sparse(sparse_prediction)
+        sparse_prediction = self.sigmoid_sparse(x1[:, -1])
         x1 = self.upsample_or_downsample(x1)
         new_x = torch.zeros(x1.shape[0], x2.shape[1] * 2, x2.shape[2] * 2).to(
             x1.device
