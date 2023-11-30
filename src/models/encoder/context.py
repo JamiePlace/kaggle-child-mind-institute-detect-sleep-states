@@ -9,17 +9,25 @@ class ContextEncoder(nn.Module):
     ):
         super().__init__()
         self.input_size = input_size
-        self.hidden_size = 100
+        self.hidden_size1 = 50
+        self.hidden_size2 = 100
         self.dropout = 0
         self.lstm1 = nn.LSTM(
             input_size=self.input_size,
-            hidden_size=self.hidden_size,
-            num_layers=2,
+            hidden_size=self.hidden_size1,
+            num_layers=1,
             dropout=self.dropout,
             bidirectional=True,
             batch_first=True,
         )
-        self.relu = nn.ReLU()
+        self.lstm2 = nn.LSTM(
+            input_size=self.input_size,
+            hidden_size=self.hidden_size2,
+            num_layers=1,
+            dropout=self.dropout,
+            bidirectional=True,
+            batch_first=True,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model.
@@ -38,6 +46,7 @@ class ContextEncoder(nn.Module):
         # we can do this by swapping the second and third dimensions
         # and declaring the first dimension is not the batch size
         x = x.view(1, x.shape[0], x.shape[1])
-        x, _ = self.lstm1(x)
+        x, (h_n, c_n) = self.lstm1(x)
+        x, _ = self.lstm2(x, (h_n, c_n))
         x = x.squeeze()
         return x

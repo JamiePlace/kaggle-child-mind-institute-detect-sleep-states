@@ -55,9 +55,9 @@ class PrecTimeModel(nn.Module):
             dict[str, torch.Tensor]: logits (batch_size, n_timesteps, n_classes)
         """
         x1, x2 = self.feature_extractor(x)
-        sparse_fully_connected = self.fc_sparse(x1)
-        sparse_prediction = self.sigmoid_sparse(sparse_fully_connected)
         x1 = self.context_extractor(x1)
+        sparse_prediction = self.fc_sparse(x1[:, 0])
+        sparse_prediction = self.sigmoid_sparse(sparse_prediction)
         x1 = self.upsample_or_downsample(x1)
         new_x = torch.zeros(x1.shape[0], x2.shape[1] * 2, x2.shape[2] * 2).to(
             x1.device

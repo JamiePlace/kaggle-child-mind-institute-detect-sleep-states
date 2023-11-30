@@ -122,7 +122,7 @@ class PrecTime(LightningModule):
         )
 
         return (
-            loss_sparse + (2 * loss_dense),
+            loss_sparse + (1.5 * loss_dense),
             sparse_predictions,
             dense_predictions,
         )
