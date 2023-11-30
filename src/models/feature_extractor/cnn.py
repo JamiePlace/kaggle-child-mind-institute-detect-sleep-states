@@ -3,6 +3,8 @@ from typing import Callable, Optional, Tuple
 import torch
 import torch.nn as nn
 
+from src.conf import TrainConfig
+
 
 # ref: https://github.com/analokmaus/kaggle-g2net-public/tree/main/models1d_pytorch
 class CNNSpectrogram(nn.Module):
@@ -195,31 +197,36 @@ class CNNextractor(nn.Module):
 class CNNrefinor(nn.Module):
     def __init__(
         self,
+        cfg: TrainConfig,
         in_channels: int = 256,
         base_filters: int = 256,
     ):
         super().__init__()
         self.in_channels = in_channels
         dropout = 0.5
-        self.conv = nn.Sequential(
-            nn.Conv1d(
-                in_channels=in_channels,
-                out_channels=base_filters,
-                kernel_size=11,
-                stride=1,
-                dilation=1,
-                padding="same",
-            ),
-            nn.Upsample(scale_factor=2, mode="linear"),
-            nn.Conv1d(
-                in_channels=in_channels,
-                out_channels=base_filters,
-                kernel_size=11,
-                stride=1,
-                dilation=1,
-                padding="same",
-            ),
-            nn.Dropout(p=dropout),
+        self.base_filters = base_filters
+
+        self.conv1 = nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=base_filters,
+            kernel_size=11,
+            stride=1,
+            dilation=1,
+            padding="same",
+        )
+        self.upsample = nn.Upsample(scale_factor=2, mode="linear")
+        self.conv2 = nn.Conv1d(
+            in_channels=base_filters,
+            out_channels=base_filters,
+            kernel_size=11,
+            stride=1,
+            dilation=1,
+            padding="same",
+        )
+        self.dropout = nn.Dropout(p=dropout)
+        self.linear = nn.Linear(
+            in_features=65536,
+            out_features=cfg.window_size,
         )
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
@@ -234,4 +241,11 @@ class CNNrefinor(nn.Module):
         Returns:
             Tuple[Tensor, Tensor]: (some number), (batch_size, base_filters, some number)
         """
-        return self.conv(x)
+        x = x.view((x.shape[0], self.in_channels, -1))
+        x = self.conv1(x)
+        x = self.upsample(x)
+        x = self.conv2(x)
+        x = self.dropout(x)
+        x = x.flatten(1)
+        x = self.linear(x)
+        return x

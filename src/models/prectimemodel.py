@@ -17,6 +17,7 @@ class PrecTimeModel(nn.Module):
     ):
         super().__init__()
         self.n_classes = n_classes
+        self.cfg = cfg
         base_filters = 128
         self.feature_extractor = CNNextractor(
             in_channels=in_channels, base_filters=base_filters
@@ -33,12 +34,9 @@ class PrecTimeModel(nn.Module):
                 align_corners=True,
             )
         self.prediction_refinor = CNNrefinor(
-            in_channels=base_filters * 2, base_filters=base_filters * 2
+            cfg, in_channels=cfg.window_size * 2, base_filters=base_filters
         )
-        self.fc_sparse = nn.Linear(100, n_classes)
-        self.fc_dense = nn.Linear(
-            cfg.window_size * base_filters * 2 * 4, cfg.window_size
-        )
+        self.fc_sparse = nn.Linear(base_filters, n_classes)
         self.sigmoid_sparse = nn.Sigmoid()
         self.sigmoid_dense = nn.Sigmoid()
 
@@ -56,7 +54,7 @@ class PrecTimeModel(nn.Module):
         """
         x1, x2 = self.feature_extractor(x)
         x1 = self.context_extractor(x1)
-        sparse_prediction = self.fc_sparse(x1[:, 0])
+        sparse_prediction = self.fc_sparse(x1[:, -1])
         sparse_prediction = self.sigmoid_sparse(sparse_prediction)
         x1 = self.upsample_or_downsample(x1)
         new_x = torch.zeros(x1.shape[0], x2.shape[1] * 2, x2.shape[2] * 2).to(
@@ -65,8 +63,6 @@ class PrecTimeModel(nn.Module):
         new_x[:, : x2.shape[1], : x2.shape[2]] = x2
         new_x[:, x2.shape[1] :, x2.shape[2] :] = x1
         new_x = self.prediction_refinor(new_x)
-        new_x = torch.flatten(new_x, start_dim=1)
-        new_x = self.fc_dense(new_x)
         dense_prediction = self.sigmoid_dense(new_x)
         return {
             "sparse_predictions": sparse_prediction.squeeze(),
