@@ -21,7 +21,7 @@ class ContextEncoder(nn.Module):
             batch_first=True,
         )
         self.lstm2 = nn.LSTM(
-            input_size=self.input_size,
+            input_size=self.hidden_size1 * 2,
             hidden_size=self.hidden_size2,
             num_layers=1,
             dropout=self.dropout,
