@@ -14,8 +14,20 @@ class ContextEncoder(nn.Module):
         hidden_size2 = 100
         self.dropout = 0
         self.lstm_stacked = nn.Sequential(
-            nn.LSTM(input_size, hidden_size1, 1),
-            nn.LSTM(hidden_size1, hidden_size2, 1),
+            nn.LSTM(
+                input_size,
+                hidden_size1,
+                num_layers=1,
+                bidirectional=True,
+                batch_first=True,
+            ),
+            nn.LSTM(
+                hidden_size1,
+                hidden_size2,
+                num_layers=1,
+                bidirectional=True,
+                batch_first=True,
+            ),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
