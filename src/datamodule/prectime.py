@@ -122,9 +122,6 @@ def pre_process_for_training(cfg: PrepareDataConfig):
         .drop_nulls()
     )
 
-    batched_data = np.empty(
-        (cfg.batch_size, cfg.window_size, len(cfg.features))
-    )
     output_path = Path(cfg.dir.processed_dir) / "train/"
     train_keys = []
     valid_keys = []
@@ -249,6 +246,23 @@ def pre_process_for_inference(cfg: InferenceConfig):
         series_chunks, _, _, number_of_steps = split_array_into_chunks(
             series_features, None, cfg.window_size, phase=cfg.phase
         )
+        if series_chunks.shape[0] % cfg.batch_size != 0:
+            # pad the series_chunks with zeros
+            pad_size = cfg.batch_size - (
+                series_chunks.shape[0] % cfg.batch_size
+            )
+            series_chunks = np.concatenate(
+                (
+                    series_chunks,
+                    np.zeros(
+                        (
+                            pad_size,
+                            series_chunks.shape[1],
+                            series_chunks.shape[2],
+                        )
+                    ),
+                )
+            )
         series_length[series_id] = number_of_steps
         # for each chunk, save the chunk and the label
         for i, chunk in enumerate(series_chunks):
@@ -380,7 +394,7 @@ class PrecTimeDataModule(LightningDataModule):
         train_loader = DataLoader(
             train_dataset,
             batch_size=1,
-            shuffle=False,
+            shuffle=True,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
             drop_last=True,
@@ -392,7 +406,7 @@ class PrecTimeDataModule(LightningDataModule):
         valid_dataset = ValidDataset(cfg=self.cfg)
         valid_loader = DataLoader(
             valid_dataset,
-            batch_size=self.cfg.dataset.batch_size,
+            batch_size=1,
             shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
