@@ -13,9 +13,9 @@
             "justMyCode": false,
             "args": [
                 "dir=local",
-                "num_workers=1",
-                "exp_name=full_model_002",
-                "batch_size=64",
+                "num_workers=16",
+                "exp_name=full_model_004",
+                "batch_size=128",
                 "prediction_threshold=0.5"
             ]
         },
@@ -46,6 +46,16 @@
                 "trainer.debug=false",
                 "refresh_processed_data=false",
                 "window_size=100",
+            ]
+        },
+        {
+            "name": "Python: Examine",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/run/examine_results.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
             ]
         },
         {
