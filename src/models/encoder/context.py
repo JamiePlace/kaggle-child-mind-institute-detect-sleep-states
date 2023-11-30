@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import torch
 import torch.nn as nn
 
@@ -9,24 +10,12 @@ class ContextEncoder(nn.Module):
     ):
         super().__init__()
         self.input_size = input_size
-        self.hidden_size1 = 50
-        self.hidden_size2 = 100
+        hidden_size1 = 50
+        hidden_size2 = 100
         self.dropout = 0
-        self.lstm1 = nn.LSTM(
-            input_size=self.input_size,
-            hidden_size=self.hidden_size1,
-            num_layers=1,
-            dropout=self.dropout,
-            bidirectional=True,
-            batch_first=True,
-        )
-        self.lstm2 = nn.LSTM(
-            input_size=self.hidden_size1 * 2,
-            hidden_size=self.hidden_size2,
-            num_layers=1,
-            dropout=self.dropout,
-            bidirectional=True,
-            batch_first=True,
+        self.lstm_stacked = nn.Sequential(
+            nn.LSTM(input_size, hidden_size1, 1),
+            nn.LSTM(hidden_size1, hidden_size2, 1),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -46,7 +35,6 @@ class ContextEncoder(nn.Module):
         # we can do this by swapping the second and third dimensions
         # and declaring the first dimension is not the batch size
         x = x.view(1, x.shape[0], x.shape[1])
-        x, (h_n, c_n) = self.lstm1(x)
-        x, _ = self.lstm2(x, (h_n, c_n))
+        x = self.lstm_stacked(x)
         x = x.squeeze()
         return x
