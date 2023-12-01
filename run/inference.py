@@ -33,12 +33,15 @@ def load_model(
     )
 
     # load weights
-    weight_path = (
-        Path(cfg.dir.model_dir)
-        / cfg.weight.exp_name
-        / cfg.weight.run_name
-        / "best_model.pth"
-    )
+    if "jamie" in cfg.dir.data_dir:
+        weight_path = (
+            Path(cfg.dir.model_dir)
+            / cfg.weight.exp_name
+            / cfg.weight.run_name
+            / "best_model.pth"
+        )
+    else:
+        weight_path = Path(cfg.dir.model_dir) / "best_model.pth"
     model.load_state_dict(torch.load(weight_path))
     print('load weight from "{}"'.format(weight_path))
     return model
@@ -56,7 +59,7 @@ def get_test_dataloader(cfg: InferenceConfig) -> DataLoader:
     test_dataset = TestDataset(cfg)
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=cfg.batch_size,
+        batch_size=1,
         shuffle=False,
         num_workers=cfg.num_workers,
         pin_memory=True,
@@ -66,6 +69,7 @@ def get_test_dataloader(cfg: InferenceConfig) -> DataLoader:
 
 
 def inference(
+    cfg: InferenceConfig,
     loader: DataLoader,
     model: nn.Module,
     device: torch.device,
@@ -79,10 +83,23 @@ def inference(
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=True):  # type: ignore
                 x = batch["feature"].half().to(device)
+                if len(x.shape) != 4:
+                    raise ValueError("x.shape is not 4")
+                else:
+                    x = x.squeeze(0)
+                if x.shape[0] != cfg.batch_size:
+                    raise ValueError(
+                        f"batch size is not {cfg.batch_size}... {x.shape[0]}, key: {batch['key']}"
+                    )
                 model_output = model(x)
                 prediction = model_output["dense_predictions"]
+                prediction = prediction.detach().cpu().numpy()
+                if np.isnan(prediction).any():
+                    raise ValueError(
+                        f"nan-detected in predictions... key {batch['key']}"
+                    )
                 key = batch["key"]
-                preds.append(prediction.detach().cpu().numpy())
+                preds.append(prediction)
                 keys.append(key)
 
     return keys, preds  # type: ignore
@@ -109,7 +126,9 @@ def main(cfg: InferenceConfig):
         seed_everything(cfg.seed)
 
         with trace("inference"):
-            key_list, pred_list = inference(test_dataloader, model, device)
+            key_list, pred_list = inference(
+                cfg, test_dataloader, model, device
+            )
         grouped_preds = {}
         with trace("grouping predctions"):
             for i, key_sub_list in enumerate(key_list):
@@ -117,7 +136,7 @@ def main(cfg: InferenceConfig):
                     key = key_id.split("_")[0]
                     if key not in grouped_preds.keys():
                         grouped_preds[key] = []
-                    grouped_preds[key] += pred_list[i][j, :].squeeze().tolist()
+                    grouped_preds[key] += pred_list[i].flatten().tolist()
 
         with trace("saving predictions"):
             with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:

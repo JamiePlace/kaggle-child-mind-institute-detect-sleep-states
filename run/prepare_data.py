@@ -174,11 +174,9 @@ def main(cfg: PrepareDataConfig):
             .collect(streaming=True)
             .sort(by=["series_id", "timestamp"])
         )
-        n_unique = series_df.get_column("series_id").n_unique()
+        # n_unique = series_df.get_column("series_id").n_unique()
     with trace("Save features"):
-        for series_id, this_series_df in tqdm(
-            series_df.group_by("series_id"), total=n_unique
-        ):
+        for series_id, this_series_df in tqdm(series_df.group_by("series_id")):
             this_series_df = add_feature(this_series_df)
             if cfg.phase == "train":
                 this_series_df = truncate_features(
@@ -193,7 +191,7 @@ def main(cfg: PrepareDataConfig):
         for file in (Path(cfg.dir.processed_dir) / cfg.phase).glob("*.pkl")
     ]
 
-    with trace("Remove old files"):
+    with trace("Remove old processed files"):
         for file in tqdm(data_files):
             os.remove(Path(cfg.dir.processed_dir) / cfg.phase / file)
 

@@ -24,7 +24,7 @@ def copy_files_with_exts(source_dir: Path, dest_dir: Path, exts: list):
             # create a copy destination directory if necessary
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # copy file 
+            # copy file
             shutil.copy2(source_path, dest_path)
             print(f"Copied {source_path} to {dest_path}")
 
@@ -33,7 +33,10 @@ def copy_files_with_exts(source_dir: Path, dest_dir: Path, exts: list):
 @click.option("--title", "-t", default="CMI-model")
 @click.option("--dir", "-d", type=Path, default="./output/train")
 @click.option(
-    "--extentions", "-e", type=list[str], default=["best_model.pth", ".hydra/*.yaml"]
+    "--extentions",
+    "-e",
+    type=list[str],
+    default=["single/*.pth", ".hydra/*.yaml"],
 )
 @click.option("--user_name", "-u", default="jamieplace")
 @click.option("--new", "-n", is_flag=True)

@@ -21,6 +21,7 @@ phase: test
 event_threshold: 2160 # 3 hours
 duration_threshold: 360 # 30 minutes
 prediction_threshold: 0.5
+all_training: false
 weight:
   exp_name: ${exp_name}
   run_name: single

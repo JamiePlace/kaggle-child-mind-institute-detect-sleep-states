@@ -35,19 +35,6 @@ LOGGER = logging.getLogger(Path(__file__).name)
 def main(cfg: TrainConfig):
     # pre-process data to enable efficient data loading
 
-    train_data_files = [
-        train_file.name
-        for train_file in (Path(cfg.dir.processed_dir) / "train").glob("*.pkl")
-    ]
-    if cfg.refresh_processed_data:
-        if len(train_data_files) > 0:
-            LOGGER.info("Removing Previously Processed Files")
-            for file in train_data_files:
-                os.remove(Path(cfg.dir.processed_dir) / "train" / file)
-
-        LOGGER.info("Processing Data for Training")
-        pre_process_for_training(cfg)
-
     seed_everything(cfg.seed)
 
     LOGGER.info("Set Up DataModule")

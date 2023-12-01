@@ -57,38 +57,38 @@ def expand_sparse_label(
 
 
 # finish calculating the score
-def calculate_score(cfg: InferenceConfig, series_id: str | None = None):
-    pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
-    if series_id:
-        pred_df = pred_df.filter(pl.col("series_id") == series_id)
-    event_df = (
-        pl.read_csv(Path(cfg.dir.data_dir) / "train_events.csv")
-        .drop_nulls()
-        .filter(pl.col("series_id").is_in(pred_df["series_id"].unique()))
-        .drop_nulls()
-    )
-    print(event_df)
-    print(pred_df)
-    if series_id:
-        return event_detection_ap(event_df.to_pandas(), pred_df.to_pandas())
-
-    train_score = event_detection_ap(
-        event_df.filter(
-            pl.col("series_id").is_in(cfg.split.train_series_ids)
-        ).to_pandas(),
-        pred_df.filter(
-            pl.col("series_id").is_in(cfg.split.train_series_ids)
-        ).to_pandas(),
-    )
-    valid_score = event_detection_ap(
-        event_df.filter(
-            pl.col("series_id").is_in(cfg.split.valid_series_ids)
-        ).to_pandas(),
-        pred_df.filter(
-            pl.col("series_id").is_in(cfg.split.valid_series_ids)
-        ).to_pandas(),
-    )
-    return train_score, valid_score
+# def calculate_score(cfg: InferenceConfig, series_id: str | None = None):
+#    pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
+#    if series_id:
+#        pred_df = pred_df.filter(pl.col("series_id") == series_id)
+#    event_df = (
+#        pl.read_csv(Path(cfg.dir.data_dir) / "train_events.csv")
+#        .drop_nulls()
+#        .filter(pl.col("series_id").is_in(pred_df["series_id"].unique()))
+#        .drop_nulls()
+#    )
+#    print(event_df)
+#    print(pred_df)
+#    if series_id:
+#        return event_detection_ap(event_df.to_pandas(), pred_df.to_pandas())
+#
+#    train_score = event_detection_ap(
+#        event_df.filter(
+#            pl.col("series_id").is_in(cfg.split.train_series_ids)
+#        ).to_pandas(),
+#        pred_df.filter(
+#            pl.col("series_id").is_in(cfg.split.train_series_ids)
+#        ).to_pandas(),
+#    )
+#    valid_score = event_detection_ap(
+#        event_df.filter(
+#            pl.col("series_id").is_in(cfg.split.valid_series_ids)
+#        ).to_pandas(),
+#        pred_df.filter(
+#            pl.col("series_id").is_in(cfg.split.valid_series_ids)
+#        ).to_pandas(),
+#    )
+#    return train_score, valid_score
 
 
 @hydra.main(config_path="conf", config_name="inference", version_base="1.2")
@@ -110,11 +110,11 @@ def main(cfg: InferenceConfig):
 
     print(series_id)
 
-    train_score, valid_score = calculate_score(cfg)  # type: ignore
-    print(f"train score: {train_score:.4f}", f"valid score: {valid_score:.4f}")
+    # train_score, valid_score = calculate_score(cfg)  # type: ignore
+    # print(f"train score: {train_score:.4f}", f"valid score: {valid_score:.4f}")
 
-    score = calculate_score(cfg, series_id)
-    print(f"score: {score:.4f}")
+    # score = calculate_score(cfg, series_id)
+    # print(f"score: {score:.4f}")
 
     sparse_label, dense_label, anglez, enmo = get_label(cfg, series_id)
     this_series_length = len(anglez)

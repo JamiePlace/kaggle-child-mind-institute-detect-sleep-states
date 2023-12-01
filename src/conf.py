@@ -142,6 +142,7 @@ class InferenceConfig(TrainConfig):
     event_threshold: int
     duration_threshold: int
     prediction_threshold: float
+    all_training: bool
 
 
 @dataclass

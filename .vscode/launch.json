@@ -13,7 +13,7 @@
             "justMyCode": false,
             "args": [
                 "dir=local",
-                "num_workers=16",
+                "num_workers=2",
                 "exp_name=full_model_004",
                 "batch_size=128",
                 "prediction_threshold=0.5"
@@ -28,8 +28,9 @@
             "justMyCode": false,
             "args": [
                 "dir=local",
-                "batch_size=64",
-                "phase=train"
+                "batch_size=128",
+                "phase=validation",
+                "series_ids=[fe90110788d2]"
             ]
         },
         {

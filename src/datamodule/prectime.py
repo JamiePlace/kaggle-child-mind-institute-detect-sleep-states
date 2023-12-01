@@ -8,6 +8,7 @@ import os
 import torch
 from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning import LightningDataModule
+import gc
 
 from src.conf import TrainConfig, InferenceConfig, PrepareDataConfig
 
@@ -15,6 +16,7 @@ from src.conf import TrainConfig, InferenceConfig, PrepareDataConfig
 def load_features(
     feature_names: list[str],
     series_ids: Optional[list[str]],
+    series_id: Optional[str],
     processed_dir: Path,
     phase: str,
 ) -> dict[str, np.ndarray]:
@@ -26,8 +28,18 @@ def load_features(
             series_dir.name for series_dir in (processed_dir / phase).glob("*")
         ]
 
-    for series_id in series_ids:
-        series_dir = processed_dir / phase / series_id
+    if series_id is None:
+        for series_id in tqdm(series_ids):
+            series_dir = processed_dir / phase / series_id
+
+            this_feature = []
+            for feature_name in feature_names:
+                this_feature.append(
+                    np.load(series_dir / f"{feature_name}.npy")
+                )
+            features[series_dir.name] = np.stack(this_feature, axis=1)
+    else:
+        series_dir = processed_dir / phase / series_id  # type: ignore
         this_feature = []
         for feature_name in feature_names:
             this_feature.append(np.load(series_dir / f"{feature_name}.npy"))
@@ -111,6 +123,7 @@ def pre_process_for_training(cfg: PrepareDataConfig):
     features = load_features(
         feature_names=cfg.features,
         series_ids=all_series_ids,
+        series_id=None,
         processed_dir=features_path,
         phase="train",
     )
@@ -230,18 +243,24 @@ def pre_process_for_inference(cfg: InferenceConfig):
             series_dir.name
             for series_dir in (features_path / cfg.phase).glob("*")
         ]
-    features = load_features(
-        feature_names=cfg.features,
-        series_ids=all_series_ids,
-        processed_dir=features_path,
-        phase=cfg.phase,
-    )
 
+    if cfg.all_training:
+        all_series_ids = (
+            cfg.split.train_series_ids + cfg.split.valid_series_ids
+        )
     output_path = Path(cfg.dir.processed_dir) / "inference/"
 
     inference_keys = []
     series_length = {}
     for series_id in tqdm(all_series_ids):
+        features = load_features(
+            feature_names=cfg.features,
+            series_ids=None,
+            series_id=series_id,
+            processed_dir=features_path,
+            phase=cfg.phase,
+        )
+
         series_features = features[series_id]
         series_chunks, _, _, number_of_steps = split_array_into_chunks(
             series_features, None, cfg.window_size, phase=cfg.phase
@@ -264,8 +283,13 @@ def pre_process_for_inference(cfg: InferenceConfig):
                 )
             )
         series_length[series_id] = number_of_steps
+
+        batched_chunks = np.array_split(
+            series_chunks, series_chunks.shape[0] // cfg.batch_size
+        )
         # for each chunk, save the chunk and the label
-        for i, chunk in enumerate(series_chunks):
+        for i, chunk in enumerate(batched_chunks):
+            print(chunk.shape)
             key = f"{series_id}_{i:07}"
             file_name = f"{series_id}_{i:07}.pkl"
             fileobj = open(output_path / file_name, "wb")
@@ -286,6 +310,8 @@ def pre_process_for_inference(cfg: InferenceConfig):
 
     with open(output_path / "__series_length__.pkl", "wb") as f:
         pickle.dump(series_length, f)
+
+    gc.collect()
 
 
 class TrainDataset(Dataset):
