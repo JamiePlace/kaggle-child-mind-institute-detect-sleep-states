@@ -152,13 +152,13 @@ def pre_process_for_training(cfg: PrepareDataConfig):
         ) = split_array_into_chunks(
             series_features,
             series_event_df,
-            cfg.window_size,
+            cfg.dataset.window_size,
             phase="train",
         )
-        if series_chunks.shape[0] % cfg.batch_size != 0:
+        if series_chunks.shape[0] % cfg.dataset.batch_size != 0:
             # pad the series_chunks with zeros
-            pad_size = cfg.batch_size - (
-                series_chunks.shape[0] % cfg.batch_size
+            pad_size = cfg.dataset.batch_size - (
+                series_chunks.shape[0] % cfg.dataset.batch_size
             )
             series_chunks = np.concatenate(
                 (
@@ -186,15 +186,15 @@ def pre_process_for_training(cfg: PrepareDataConfig):
             )
 
         batched_chunks = np.array_split(
-            series_chunks, series_chunks.shape[0] // cfg.batch_size
+            series_chunks, series_chunks.shape[0] // cfg.dataset.batch_size
         )
 
         batched_dense_labels = np.array_split(
-            dense_labels, dense_labels.shape[0] // cfg.batch_size
+            dense_labels, dense_labels.shape[0] // cfg.dataset.batch_size
         )
 
         batched_sparse_labels = np.array_split(
-            sparse_labels, sparse_labels.shape[0] // cfg.batch_size
+            sparse_labels, sparse_labels.shape[0] // cfg.dataset.batch_size
         )
 
         # for each chunk, save the chunk and the label
@@ -263,12 +263,12 @@ def pre_process_for_inference(cfg: InferenceConfig):
 
         series_features = features[series_id]
         series_chunks, _, _, number_of_steps = split_array_into_chunks(
-            series_features, None, cfg.window_size, phase=cfg.phase
+            series_features, None, cfg.dataset.window_size, phase=cfg.phase
         )
-        if series_chunks.shape[0] % cfg.batch_size != 0:
+        if series_chunks.shape[0] % cfg.dataset.batch_size != 0:
             # pad the series_chunks with zeros
-            pad_size = cfg.batch_size - (
-                series_chunks.shape[0] % cfg.batch_size
+            pad_size = cfg.dataset.batch_size - (
+                series_chunks.shape[0] % cfg.dataset.batch_size
             )
             series_chunks = np.concatenate(
                 (
@@ -285,7 +285,7 @@ def pre_process_for_inference(cfg: InferenceConfig):
         series_length[series_id] = number_of_steps
 
         batched_chunks = np.array_split(
-            series_chunks, series_chunks.shape[0] // cfg.batch_size
+            series_chunks, series_chunks.shape[0] // cfg.dataset.batch_size
         )
         # for each chunk, save the chunk and the label
         for i, chunk in enumerate(batched_chunks):

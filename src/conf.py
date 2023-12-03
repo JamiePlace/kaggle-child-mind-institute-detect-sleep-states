@@ -58,6 +58,8 @@ class DatasetConfig:
     sigma: int
     bg_sampling_rate: float
     positive_to_negative_ratio: float
+    window_size: int
+    batch_size: int
 
 
 @dataclass
@@ -115,11 +117,10 @@ class TrainConfig:
     aug: AugmentationConfig
     pp: PostProcessConfig
     refresh_processed_data: bool
-    window_size: int
 
 
 @dataclass
-class InferenceConfig(TrainConfig):
+class InferenceConfig:
     exp_name: str
     phase: str
     seed: int
@@ -138,6 +139,7 @@ class InferenceConfig(TrainConfig):
     weight: WeightConfig
     aug: AugmentationConfig
     pp: PostProcessConfig
+    dataset: DatasetConfig
     series_ids: list[str]
     event_threshold: int
     duration_threshold: int
@@ -146,9 +148,7 @@ class InferenceConfig(TrainConfig):
 
 
 @dataclass
-class PrepareDataConfig(InferenceConfig):
+class PrepareDataConfig:
     dir: DirConfig
     phase: str
-    stacked_lookback: int
-    stacked_count: int
-    stack_cols: list[str]
+    dataset: DatasetConfig

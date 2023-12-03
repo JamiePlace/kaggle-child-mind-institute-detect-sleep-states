@@ -11,7 +11,6 @@ hydra:
 
 defaults:
   - _self_
-  - .@_here_: train
   - model: PrecTimeModel
 
 
@@ -25,10 +24,12 @@ weight:
   exp_name: ${exp_name}
   run_name: single
 
-seed: 42
-batch_size: 32
-num_workers: 2
+dataset:
+  batch_size: 128
+  window_size: 100
 
+seed: 42
+num_workers: 2
 # post_process
 pp:
   score_th: 0.02

@@ -87,9 +87,9 @@ def inference(
                     raise ValueError("x.shape is not 4")
                 else:
                     x = x.squeeze(0)
-                if x.shape[0] != cfg.batch_size:
+                if x.shape[0] != cfg.dataset.batch_size:
                     raise ValueError(
-                        f"batch size is not {cfg.batch_size}... {x.shape[0]}, key: {batch['key']}"
+                        f"batch size is not {cfg.dataset.batch_size}... {x.shape[0]}, key: {batch['key']}"
                     )
                 model_output = model(x)
                 prediction = model_output["dense_predictions"]

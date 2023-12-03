@@ -23,18 +23,22 @@ class PrecTimeModel(nn.Module):
             in_channels=in_channels, base_filters=base_filters
         )
         self.context_extractor = ContextEncoder(
-            input_size=cfg.window_size * 128,
+            input_size=cfg.dataset.window_size * 128,
         )
-        if 200 > cfg.window_size:
-            self.upsample_or_downsample = nn.AdaptiveAvgPool1d(cfg.window_size)
+        if 200 > cfg.dataset.window_size:
+            self.upsample_or_downsample = nn.AdaptiveAvgPool1d(
+                cfg.dataset.window_size
+            )
         else:
             self.upsample_or_downsample = nn.Upsample(
-                size=(base_filters, cfg.window_size),
+                size=(base_filters, cfg.dataset.window_size),
                 mode="bilinear",
                 align_corners=True,
             )
         self.prediction_refinor = CNNrefinor(
-            cfg, in_channels=cfg.window_size * 2, base_filters=base_filters
+            cfg,
+            in_channels=cfg.dataset.window_size * 2,
+            base_filters=base_filters,
         )
         self.fc_sparse = nn.Linear(200, 2)
         self.sigmoid_sparse = nn.Sigmoid()

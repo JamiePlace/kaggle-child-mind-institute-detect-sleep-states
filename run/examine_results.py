@@ -51,7 +51,9 @@ def expand_sparse_label(
 ):
     expanded_label = np.zeros(len(dense_label))
     for i, label in enumerate(sparse_label):
-        expanded_label[i * cfg.window_size : (i + 1) * cfg.window_size] = label
+        expanded_label[
+            i * cfg.dataset.window_size : (i + 1) * cfg.dataset.window_size
+        ] = label
     expanded_label = expanded_label[: len(dense_label)]
     return expanded_label
 

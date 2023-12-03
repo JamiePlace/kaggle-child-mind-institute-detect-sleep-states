@@ -226,7 +226,7 @@ class CNNrefinor(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         self.linear = nn.Linear(
             in_features=65536,
-            out_features=cfg.window_size,
+            out_features=cfg.dataset.window_size,
         )
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
