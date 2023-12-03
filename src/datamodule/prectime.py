@@ -101,7 +101,7 @@ def split_array_into_chunks(
 
 
 def truncate_features(
-    cfg: TrainConfig, features: np.ndarray, event_df: pl.DataFrame
+    cfg: PrepareDataConfig, features: np.ndarray, event_df: pl.DataFrame
 ) -> np.ndarray:
     # find the step value of the last wakeup event
     last_wakeup_step = event_df.get_column("wakeup").max()
@@ -119,7 +119,7 @@ def pre_process_for_training(cfg: PrepareDataConfig):
     features_path = Path(cfg.dir.processed_dir)
     # load all of the features for all of the training data
     # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
-    all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    all_series_ids = cfg.split.train_series_ids 
     features = load_features(
         feature_names=cfg.features,
         series_ids=all_series_ids,
@@ -232,22 +232,15 @@ def pre_process_for_training(cfg: PrepareDataConfig):
 
 
 # pre process data for inference. no event_df is needed
-def pre_process_for_inference(cfg: InferenceConfig):
+def pre_process_for_inference(cfg: PrepareDataConfig):
     features_path = Path(cfg.dir.processed_dir)
     # load all of the features for all of the training data
     # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
-    if cfg.series_ids[0] is not None:
-        all_series_ids = cfg.series_ids
-    else:
-        all_series_ids = [
-            series_dir.name
-            for series_dir in (features_path / cfg.phase).glob("*")
-        ]
+    all_series_ids = [
+        series_dir.name
+        for series_dir in (features_path / cfg.phase).glob("*")
+    ]
 
-    if cfg.all_training:
-        all_series_ids = (
-            cfg.split.train_series_ids + cfg.split.valid_series_ids
-        )
     output_path = Path(cfg.dir.processed_dir) / "inference/"
 
     inference_keys = []

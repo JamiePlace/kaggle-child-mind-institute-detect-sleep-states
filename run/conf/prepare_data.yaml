@@ -11,20 +11,14 @@ hydra:
 
 defaults:
   - _self_
+  - split: fold_0
 
 phase: train
-stack_cols: 
+features:
   - "anglez"
   - "enmo"
-  - "anglez_sin"
-  - "anglez_cos"
   - "hour_sin"
   - "hour_cos"
-  - "month_sin"
-  - "month_cos"
-  - "minute_cos"
-  - "minute_sin"
-
 dataset:
   batch_size: 128
   window_size: 100

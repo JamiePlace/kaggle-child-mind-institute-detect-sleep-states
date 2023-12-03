@@ -152,3 +152,5 @@ class PrepareDataConfig:
     dir: DirConfig
     phase: str
     dataset: DatasetConfig
+    features: list[str]
+    split: SplitConfig
