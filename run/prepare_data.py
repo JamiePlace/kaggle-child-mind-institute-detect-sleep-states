@@ -121,8 +121,6 @@ def save_each_series(
 
     for col_name in columns:
         x = this_series_df.get_column(col_name).to_numpy(zero_copy_only=True)
-        if stacked_lookback > 0 and col_name in stack_cols:
-            x = stack_features(x, stacked_lookback, stacked_count)
         np.save(output_dir / f"{col_name}.npy", x)
 
 
