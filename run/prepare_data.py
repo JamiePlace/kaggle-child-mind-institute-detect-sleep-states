@@ -154,30 +154,31 @@ def main(cfg: PrepareDataConfig):
         else:
             raise ValueError(f"Invalid phase: {cfg.phase}")
 
+        series_ids_lf = series_lf.select(pl.col("series_id"))
+        series_ids = set(series_ids_lf.collect().get_column("series_id"))
+
         # preprocess
-        series_df = (
-            series_lf.with_columns(
-                pl.col("timestamp").str.to_datetime("%Y-%m-%dT%H:%M:%S%z"),
-                deg_to_rad(pl.col("anglez")).alias("anglez_rad"),
-                (pl.col("anglez") - ANGLEZ_MEAN) / ANGLEZ_STD,
-                (pl.col("enmo") - ENMO_MEAN) / ENMO_STD,
-            )
-            .select(
-                [
-                    pl.col("series_id"),
-                    pl.col("anglez"),
-                    pl.col("enmo"),
-                    pl.col("timestamp"),
-                    pl.col("anglez_rad"),
-                ]
-            )
-            .collect(streaming=True)
-            .sort(by=["series_id", "timestamp"])
+        series_df = series_lf.with_columns(
+            pl.col("timestamp").str.to_datetime("%Y-%m-%dT%H:%M:%S%z"),
+            deg_to_rad(pl.col("anglez")).alias("anglez_rad"),
+            (pl.col("anglez") - ANGLEZ_MEAN) / ANGLEZ_STD,
+            (pl.col("enmo") - ENMO_MEAN) / ENMO_STD,
+        ).select(
+            [
+                pl.col("series_id"),
+                pl.col("anglez"),
+                pl.col("enmo"),
+                pl.col("timestamp"),
+                pl.col("anglez_rad"),
+            ]
         )
-        # n_unique = series_df.get_column("series_id").n_unique()
     with trace("Save features"):
-        for series_id, this_series_df in tqdm(series_df.group_by("series_id")):
-            this_series_df = add_feature(this_series_df)
+        for series_id in tqdm(series_ids):
+            this_series_df = add_feature(
+                series_df.filter(pl.col("series_id") == series_id)
+                .collect()
+                .sort(by=["series_id", "timestamp"])
+            )
             if cfg.phase == "train":
                 this_series_df = truncate_features(
                     cfg, this_series_df, str(series_id)

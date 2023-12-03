@@ -289,7 +289,6 @@ def pre_process_for_inference(cfg: InferenceConfig):
         )
         # for each chunk, save the chunk and the label
         for i, chunk in enumerate(batched_chunks):
-            print(chunk.shape)
             key = f"{series_id}_{i:07}"
             file_name = f"{series_id}_{i:07}.pkl"
             fileobj = open(output_path / file_name, "wb")

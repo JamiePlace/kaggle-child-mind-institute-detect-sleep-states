@@ -103,7 +103,7 @@ def main(cfg: InferenceConfig):
 
     pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
     # Plot the data
-    if cfg.series_ids:
+    if cfg.series_ids[0]:
         series_id = cfg.series_ids[0]
     else:
         series_id = np.random.choice(list(series_length.keys()))

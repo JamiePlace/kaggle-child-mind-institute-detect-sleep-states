@@ -12,7 +12,6 @@ hydra:
 defaults:
   - _self_
   - .@_here_: train
-  - dir: local
   - model: PrecTimeModel
 
 

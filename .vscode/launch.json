@@ -29,8 +29,7 @@
             "args": [
                 "dir=local",
                 "batch_size=128",
-                "phase=validation",
-                "series_ids=[fe90110788d2]"
+                "phase=test",
             ]
         },
         {

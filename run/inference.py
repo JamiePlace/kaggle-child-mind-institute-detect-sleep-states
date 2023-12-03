@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 
-from rich import print
+# from rich import print
 import pickle
 import hydra
 import numpy as np
@@ -111,6 +111,7 @@ def make_submission(
     series_length: dict[str, int],
 ) -> pl.DataFrame:
     sub_df = post_process_for_prec(cfg, preds, series_length)
+    sub_df = sub_df.drop_nulls()
 
     return sub_df
 
@@ -122,29 +123,22 @@ def main(cfg: InferenceConfig):
     with trace("load model"):
         model = load_model(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if not os.path.exists(Path(cfg.dir.sub_dir) / "predictions.pkl"):
-        seed_everything(cfg.seed)
+    seed_everything(cfg.seed)
 
-        with trace("inference"):
-            key_list, pred_list = inference(
-                cfg, test_dataloader, model, device
-            )
-        grouped_preds = {}
-        with trace("grouping predctions"):
-            for i, key_sub_list in enumerate(key_list):
-                for j, key_id in enumerate(key_sub_list):
-                    key = key_id.split("_")[0]
-                    if key not in grouped_preds.keys():
-                        grouped_preds[key] = []
-                    grouped_preds[key] += pred_list[i].flatten().tolist()
+    with trace("inference"):
+        key_list, pred_list = inference(cfg, test_dataloader, model, device)
+    grouped_preds = {}
+    with trace("grouping predctions"):
+        for i, key_sub_list in enumerate(key_list):
+            for j, key_id in enumerate(key_sub_list):
+                key = key_id.split("_")[0]
+                if key not in grouped_preds.keys():
+                    grouped_preds[key] = []
+                grouped_preds[key] += pred_list[i].flatten().tolist()
 
-        with trace("saving predictions"):
-            with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
-                pickle.dump(grouped_preds, f)
-    else:
-        with trace("loading predictions"):
-            with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "rb") as f:
-                grouped_preds = pickle.load(f)
+    with trace("saving predictions"):
+        with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
+            pickle.dump(grouped_preds, f)
 
     with trace("make submission"):
         series_length = test_dataloader.dataset.series_length  # type: ignore
