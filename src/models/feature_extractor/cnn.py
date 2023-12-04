@@ -3,7 +3,7 @@ from typing import Callable, Optional, Tuple
 import torch
 import torch.nn as nn
 
-from src.conf import TrainConfig
+from src.conf import TrainConfig, InferenceConfig
 
 
 # ref: https://github.com/analokmaus/kaggle-g2net-public/tree/main/models1d_pytorch
@@ -197,7 +197,7 @@ class CNNextractor(nn.Module):
 class CNNrefinor(nn.Module):
     def __init__(
         self,
-        cfg: TrainConfig,
+        cfg: TrainConfig | InferenceConfig,
         in_channels: int = 256,
         base_filters: int = 256,
     ):

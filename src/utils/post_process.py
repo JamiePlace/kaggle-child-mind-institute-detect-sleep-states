@@ -65,6 +65,7 @@ def merge_short_events(
     group = np.repeat(group, 2)
     if len(event_df) % 2 != 0:
         group = np.append(group, group[-1] + 1)
+    group = group.astype(np.int64)
     event_df = event_df.with_columns(pl.Series(name="group", values=group))
     wakeup_event_diff = event_df.filter(
         pl.col("event") == "wakeup"
@@ -99,8 +100,6 @@ def merge_short_events(
         (pl.col("event") == "onset")
         & (pl.col("group").is_in(real_wakeups["group"]))
     )
-    # convert real_wakeups groups column to int32
-    real_wakeups = real_wakeups.with_columns(pl.col("group").cast(pl.Int32))
     merged_df = real_onsets.vstack(
         real_wakeups.select(["series_id", "step", "event", "score", "group"])
     )
@@ -110,7 +109,9 @@ def merge_short_events(
     group = np.repeat(group, 2)
     if len(merged_df) % 2 != 0:
         group = np.append(group, group[-1] + 1)
-    merged_df = merged_df.with_columns(pl.Series(name="group", values=group))
+    merged_df = merged_df.with_columns(
+        pl.Series(name="group", values=group, dtype=pl.Int64)
+    )
     # find wakeups that are very close to the next onset and merge them
     merged_df = merged_df.with_columns(
         pl.col("step").diff().alias("step_diff")
@@ -129,20 +130,20 @@ def merge_short_events(
         (pl.col("event") == "wakeup")
         & ~pl.col("group").is_in(wakeup_groups_to_remove)
     )
+    wakeup_events = wakeup_events.with_columns(
+        [pl.col(n).cast(t) for n, t in onset_events.schema.items()]
+    )
     merged_df = onset_events.vstack(wakeup_events)
 
     merged_df = merged_df.select(["series_id", "step", "event", "score"]).sort(
         by=["series_id", "step"]
     )
-    group = np.arange(len(merged_df) // 2)
-    group = np.repeat(group, 2)
-    if len(merged_df) % 2 != 0:
-        group = np.append(group, group[-1] + 1)
-    merged_df = merged_df.with_columns(pl.Series(name="group", values=group))
     # calculate the difference between the current wakeup and the next onset
     row_ids = pl.Series(name="row_id", values=np.arange(len(merged_df)))
     merged_df = merged_df.with_columns(row_ids)
 
+    # convert group to int64
+    # merged_df = merged_df.with_columns(pl.col("group").cast(pl.Int32))
     return merged_df
 
 
@@ -154,6 +155,7 @@ def drop_short_events(event_df: pl.DataFrame, threshold=1000) -> pl.DataFrame:
     group = np.repeat(group, 2)
     if len(event_df) % 2 != 0:
         group = np.append(group, group[-1] + 1)
+    group = group.astype(np.int32)
     event_df = event_df.with_columns(pl.Series(name="group", values=group))
     grouped_df = (
         event_df.group_by("group", maintain_order=True)
@@ -228,7 +230,7 @@ def post_process_for_prec(
     sub_df = pl.DataFrame(records).sort(by=["series_id", "step"])
     # sub_df = sub_df.to_pandas()
     sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
-       lambda x: merge_short_events(x, series_length, cfg.duration_threshold)
+        lambda x: merge_short_events(x, series_length, cfg.duration_threshold)
     )
     sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
         lambda x: drop_short_events(x, cfg.event_threshold)

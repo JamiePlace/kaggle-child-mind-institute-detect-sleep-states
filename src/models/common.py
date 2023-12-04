@@ -8,7 +8,7 @@ from src.models.prectimemodel import PrecTimeModel
 
 
 def get_model(
-    train_cfg: TrainConfig,
+    train_cfg: TrainConfig | InferenceConfig,
     feature_dim: int,
     n_classes: int,
 ) -> PrecTimeModel:

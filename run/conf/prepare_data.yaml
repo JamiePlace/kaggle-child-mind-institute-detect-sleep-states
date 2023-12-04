@@ -11,6 +11,7 @@ hydra:
 
 defaults:
   - _self_
+  - dir: local
   - split: fold_0
 
 phase: train
@@ -22,3 +23,4 @@ features:
 dataset:
   batch_size: 128
   window_size: 100
+  on_training: false

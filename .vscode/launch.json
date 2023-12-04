@@ -15,7 +15,8 @@
                 "dir=local",
                 "num_workers=2",
                 "exp_name=full_model_004",
-                "batch_size=128",
+                "dataset.batch_size=128",
+                "dataset.window_size=100",
                 "prediction_threshold=0.5"
             ]
         },

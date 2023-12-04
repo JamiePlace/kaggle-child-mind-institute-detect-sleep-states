@@ -60,20 +60,20 @@ unzip child-mind-institute-detect-sleep-states.zip
 ### 2. Preprocess data
 
 ```bash
-rye run python -m run/prepare_data.py phase=train,test
+rye run python .\run\prepare_data.py -m phase=train,test dataset.window_size=100 dataset.batch_size=128
 ```
 
 ## Train Model
 The following commands are for training the model of LB0.714
 ```bash
-rye run python run/train.py downsample_rate=2 duration=5760 exp_name=exp001 dataset.batch_size=32
+rye run python run/train.py exp_name=exp001 dataset.batch_size=128 dataset.window_size=100
 ```
 
 You can easily perform experiments by changing the parameters because [hydra](https://hydra.cc/docs/intro/) is used.
 The following commands perform experiments with downsample_rate of 2, 4, 6, and 8.
 
 ```bash
-rye run python -m run/train.py downsample_rate=2,4,6,8
+rye run python run/train.py dataset.batch_size=128 dataset.window_size=100
 ```
 
 
@@ -85,5 +85,5 @@ rye run python tools/upload_dataset.py
 ## Inference
 The following commands are for inference of LB0.714 
 ```bash
-rye run python run/inference.py dir=kaggle exp_name=exp001 weight.run_name=single downsample_rate=2 duration=5760 model.params.encoder_weights=null pp.score_th=0.005 pp.distance=40 phase=test
+rye run python run/inference.py dir=kaggle exp_name=exp001 phase=test dataset.batch_size=128 dataset.window_size=100
 ```

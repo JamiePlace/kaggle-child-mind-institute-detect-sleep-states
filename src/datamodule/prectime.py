@@ -23,11 +23,6 @@ def load_features(
     features = {}
     # this is a hack to allow us to use the validation data as inference data
 
-    if series_ids is None:
-        series_ids = [
-            series_dir.name for series_dir in (processed_dir / phase).glob("*")
-        ]
-
     if series_id is None:
         for series_id in tqdm(series_ids):
             series_dir = processed_dir / phase / series_id
@@ -53,9 +48,10 @@ def split_array_into_chunks(
     event_df: Optional[pl.DataFrame],
     window_size: int,
     phase: str,
+    inference: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     # clean up the array such that we don't have data passed the last event
-    if phase == "train":
+    if phase == "train" and not inference:
         array = array[: event_df["wakeup"].max(), :]  # type: ignore
 
     num_rows = array.shape[0]
@@ -118,8 +114,9 @@ def pre_process_for_training(cfg: PrepareDataConfig):
     event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
     features_path = Path(cfg.dir.processed_dir)
     # load all of the features for all of the training data
-    # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
-    all_series_ids = cfg.split.train_series_ids 
+    # we seperate out train and valid data at the end
+    all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
+    # all_series_ids = cfg.split.train_series_ids
     features = load_features(
         feature_names=cfg.features,
         series_ids=all_series_ids,
@@ -236,10 +233,24 @@ def pre_process_for_inference(cfg: PrepareDataConfig):
     features_path = Path(cfg.dir.processed_dir)
     # load all of the features for all of the training data
     # all_series_ids = cfg.split.train_series_ids + cfg.split.valid_series_ids
-    all_series_ids = [
-        series_dir.name
-        for series_dir in (features_path / cfg.phase).glob("*")
-    ]
+    if cfg.phase == "train":
+        event_df_path = Path(cfg.dir.data_dir) / "train_events.csv"
+        all_series_ids = cfg.split.valid_series_ids
+        event_df = (
+            pl.read_csv(event_df_path)
+            .drop_nulls()
+            .pivot(
+                index=["series_id", "night"], columns="event", values="step"
+            )
+            .filter(pl.col("series_id").is_in(all_series_ids))
+            .drop_nulls()
+        )
+    else:
+        all_series_ids = [
+            series_dir.name
+            for series_dir in (features_path / cfg.phase).glob("*")
+        ]
+        event_df = None
 
     output_path = Path(cfg.dir.processed_dir) / "inference/"
 
@@ -256,7 +267,11 @@ def pre_process_for_inference(cfg: PrepareDataConfig):
 
         series_features = features[series_id]
         series_chunks, _, _, number_of_steps = split_array_into_chunks(
-            series_features, None, cfg.dataset.window_size, phase=cfg.phase
+            series_features,
+            event_df,
+            cfg.dataset.window_size,
+            phase=cfg.phase,
+            inference=True,
         )
         if series_chunks.shape[0] % cfg.dataset.batch_size != 0:
             # pad the series_chunks with zeros

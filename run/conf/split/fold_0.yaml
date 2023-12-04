@@ -1,6 +1,6 @@
 train_series_ids:
-  - "038441c925bb"
-  - "0402a003dae9"
+  #- "038441c925bb"
+  #- "0402a003dae9"
   - "04f547b8017d"
   - "05e1944c3818"
   - "062cae666e2a"
@@ -221,7 +221,7 @@ train_series_ids:
   - "fb223ed2278c"
   - "fcca183903b7"
 valid_series_ids:
-  - "03d92c9f6f8a"
+  #- "03d92c9f6f8a"
   - "0cd1e3d0ed95"
   - "0cfc06c129cc"
   - "12d01911d509"

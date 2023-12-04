@@ -1,5 +1,5 @@
 from pathlib import Path
-import os
+import time
 
 # from rich import print
 import pickle
@@ -10,13 +10,11 @@ import torch
 import torch.nn as nn
 from pytorch_lightning import seed_everything
 from torch.utils.data import DataLoader
-from torchvision.transforms.functional import resize
 from tqdm import tqdm
 
-from src.conf import TrainConfig, InferenceConfig
+from src.conf import InferenceConfig
 from src.datamodule.prectime import (
     TestDataset,
-    load_features,
 )
 from src.models.common import get_model
 from src.utils.common import trace
@@ -81,26 +79,26 @@ def inference(
     preds = []
     for batch in tqdm(loader, desc="inference"):
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=True):  # type: ignore
-                x = batch["feature"].half().to(device)
-                if len(x.shape) != 4:
-                    raise ValueError("x.shape is not 4")
-                else:
-                    x = x.squeeze(0)
-                if x.shape[0] != cfg.dataset.batch_size:
-                    raise ValueError(
-                        f"batch size is not {cfg.dataset.batch_size}... {x.shape[0]}, key: {batch['key']}"
-                    )
-                model_output = model(x)
-                prediction = model_output["dense_predictions"]
-                prediction = prediction.detach().cpu().numpy()
-                if np.isnan(prediction).any():
-                    raise ValueError(
-                        f"nan-detected in predictions... key {batch['key']}"
-                    )
-                key = batch["key"]
-                preds.append(prediction)
-                keys.append(key)
+            # with torch.cuda.amp.autocast(enabled=True):  # type: ignore
+            x = batch["feature"].float().to(device)
+            if len(x.shape) != 4:
+                raise MemoryError("x.shape is not 4")
+            else:
+                x = x.squeeze(0)
+            if x.shape[0] != cfg.dataset.batch_size:
+                raise MemoryError(
+                    f"batch size is not {cfg.dataset.batch_size}... {x.shape[0]}, key: {batch['key']}"
+                )
+            model_output = model(x)
+            prediction = model_output["dense_predictions"]
+            prediction = prediction.detach().cpu().numpy()
+            if np.isnan(prediction).any():
+                raise MemoryError(
+                    f"nan-detected in predictions... key {batch['key']}"
+                )
+            key = batch["key"]
+            preds.append(prediction)
+            keys.append(key)
 
     return keys, preds  # type: ignore
 
@@ -124,7 +122,7 @@ def main(cfg: InferenceConfig):
         model = load_model(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed_everything(cfg.seed)
-
+    # time.sleep(120)
     with trace("inference"):
         key_list, pred_list = inference(cfg, test_dataloader, model, device)
     grouped_preds = {}
@@ -136,9 +134,9 @@ def main(cfg: InferenceConfig):
                     grouped_preds[key] = []
                 grouped_preds[key] += pred_list[i].flatten().tolist()
 
-    with trace("saving predictions"):
-        with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
-            pickle.dump(grouped_preds, f)
+    # with trace("saving predictions"):
+    #    with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
+    #        pickle.dump(grouped_preds, fj
 
     with trace("make submission"):
         series_length = test_dataloader.dataset.series_length  # type: ignore

@@ -5,13 +5,13 @@ import torch.nn as nn
 
 from src.models.feature_extractor.cnn import CNNextractor, CNNrefinor
 from src.models.encoder.context import ContextEncoder
-from src.conf import TrainConfig
+from src.conf import TrainConfig, InferenceConfig
 
 
 class PrecTimeModel(nn.Module):
     def __init__(
         self,
-        cfg: TrainConfig,
+        cfg: TrainConfig | InferenceConfig,
         in_channels: int,
         n_classes: int,
     ):

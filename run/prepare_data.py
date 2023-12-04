@@ -1,3 +1,4 @@
+import time
 import shutil
 import os
 from pathlib import Path
@@ -112,11 +113,7 @@ def save_each_series(
     this_series_df: pl.DataFrame,
     columns: list[str],
     output_dir: Path,
-    cfg: PrepareDataConfig,
 ):
-    stacked_lookback = cfg.stacked_lookback
-    stacked_count = cfg.stacked_count
-    stack_cols = cfg.stack_cols
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for col_name in columns:
@@ -126,7 +123,12 @@ def save_each_series(
 
 @hydra.main(config_path="conf", config_name="prepare_data", version_base="1.2")
 def main(cfg: PrepareDataConfig):
-    processed_dir: Path = Path(cfg.dir.processed_dir) / cfg.phase
+    if cfg.phase in ["train", "validation"]:
+        phase_dir = "train"
+    else:
+        phase_dir = "test"
+
+    processed_dir: Path = Path(cfg.dir.processed_dir) / phase_dir
 
     if processed_dir.exists():
         shutil.rmtree(processed_dir)
@@ -152,38 +154,51 @@ def main(cfg: PrepareDataConfig):
         else:
             raise ValueError(f"Invalid phase: {cfg.phase}")
 
+        if cfg.dataset.on_training:
+            series_lf = pl.scan_parquet(
+                Path(cfg.dir.data_dir) / "train_series.parquet",
+                low_memory=True,
+            )
+
         series_ids_lf = series_lf.select(pl.col("series_id"))
-        series_ids = set(series_ids_lf.collect().get_column("series_id"))
 
         # preprocess
-        series_df = series_lf.with_columns(
-            pl.col("timestamp").str.to_datetime("%Y-%m-%dT%H:%M:%S%z"),
-            deg_to_rad(pl.col("anglez")).alias("anglez_rad"),
-            (pl.col("anglez") - ANGLEZ_MEAN) / ANGLEZ_STD,
-            (pl.col("enmo") - ENMO_MEAN) / ENMO_STD,
-        ).select(
-            [
-                pl.col("series_id"),
-                pl.col("anglez"),
-                pl.col("enmo"),
-                pl.col("timestamp"),
-                pl.col("anglez_rad"),
-            ]
-        )
-    with trace("Save features"):
-        for series_id in tqdm(series_ids):
-            this_series_df = add_feature(
-                series_df.filter(pl.col("series_id") == series_id)
-                .collect()
-                .sort(by=["series_id", "timestamp"])
+        series_df = (
+            series_lf.with_columns(
+                pl.col("timestamp").str.to_datetime("%Y-%m-%dT%H:%M:%S%z"),
+                deg_to_rad(pl.col("anglez")).alias("anglez_rad"),
+                (pl.col("anglez") - ANGLEZ_MEAN) / ANGLEZ_STD,
+                (pl.col("enmo") - ENMO_MEAN) / ENMO_STD,
             )
-            if cfg.phase == "train":
+            .select(
+                [
+                    pl.col("series_id"),
+                    pl.col("anglez"),
+                    pl.col("enmo"),
+                    pl.col("timestamp"),
+                    pl.col("anglez_rad"),
+                ]
+            )
+            .collect(streaming=True)
+            .sort(by=["series_id", "timestamp"])
+        )
+
+        series_ids = set(series_df.get_column("series_id"))
+    with trace("Save features"):
+        for series_id, this_series_df in tqdm(
+            series_df.group_by("series_id"), total=len(series_ids)
+        ):
+            this_series_df = add_feature(this_series_df)
+            if (
+                series_id in cfg.split.train_series_ids
+                and cfg.phase == "train"
+            ):
                 this_series_df = truncate_features(
                     cfg, this_series_df, str(series_id)
                 )
 
             series_dir = processed_dir / series_id  # type: ignore
-            save_each_series(this_series_df, FEATURE_NAMES, series_dir, cfg)
+            save_each_series(this_series_df, FEATURE_NAMES, series_dir)
 
     data_files = [
         file.name
@@ -198,12 +213,14 @@ def main(cfg: PrepareDataConfig):
         file.name
         for file in (Path(cfg.dir.processed_dir) / "inference").glob("*.pkl")
     ]
-    with trace("Removing old inference files"):
-        for file in tqdm(inference_files):
-            os.remove(Path(cfg.dir.processed_dir) / "inference" / file)
+    if len(inference_files) > 0:
+        with trace("Removing old inference files"):
+            for file in tqdm(inference_files):
+                os.remove(Path(cfg.dir.processed_dir) / "inference" / file)
     with trace("Prepare data for model"):
         if cfg.phase == "train":
             pre_process_for_training(cfg)
+            pre_process_for_inference(cfg)
         if cfg.phase == "test" or cfg.phase == "validation":
             pre_process_for_inference(cfg)
 

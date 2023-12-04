@@ -11,6 +11,7 @@ hydra:
 
 defaults:
   - _self_
+  - dir: local
   - model: PrecTimeModel
 
 
@@ -27,6 +28,7 @@ weight:
 dataset:
   batch_size: 128
   window_size: 100
+  on_training: false
 
 seed: 42
 num_workers: 2

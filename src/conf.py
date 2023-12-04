@@ -60,6 +60,7 @@ class DatasetConfig:
     positive_to_negative_ratio: float
     window_size: int
     batch_size: int
+    on_training: bool
 
 
 @dataclass
