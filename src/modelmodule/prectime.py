@@ -16,7 +16,8 @@ from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from src.conf import TrainConfig
 from src.utils.metrics import event_detection_ap
 from src.models.prectimemodel import PrecTimeModel
-from run.inference import make_predictions
+from run.inference import make_predictions, make_submission
+from run.examine_results import calculate_score
 
 
 class PrecTime(LightningModule):
@@ -37,12 +38,14 @@ class PrecTime(LightningModule):
         self.val_loss_non_improvement = 0
         self.best_state_dict: dict = {}
         self.training_step_outputs = {
+            "keys": [],
             "sparse_preds": [],
             "sparse_labels": [],
             "dense_preds": [],
             "dense_labels": [],
         }
         self.validation_step_outputs = {
+            "keys": [],
             "sparse_preds": [],
             "sparse_labels": [],
             "dense_preds": [],
@@ -63,15 +66,14 @@ class PrecTime(LightningModule):
             logger=True,
             prog_bar=True,
         )
-        self.training_step_outputs["sparse_preds"].append(
-            sparse_preds.argmax(dim=1)
-        )
+        self.training_step_outputs["keys"].append(batch["key"])
+        self.training_step_outputs["sparse_preds"].append(sparse_preds)
         self.training_step_outputs["dense_preds"].append(dense_preds)
         self.training_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
         )
         self.training_step_outputs["dense_labels"].append(
-            batch["dense_label"].flatten().float()
+            batch["dense_label"].float()
         )
         return loss
 
@@ -86,6 +88,7 @@ class PrecTime(LightningModule):
             logger=True,
             prog_bar=True,
         )
+        self.validation_step_outputs["keys"].append(batch["key"])
         self.validation_step_outputs["sparse_preds"].append(
             sparse_preds.argmax(dim=1)
         )
@@ -94,7 +97,7 @@ class PrecTime(LightningModule):
             batch["sparse_label"].float()
         )
         self.validation_step_outputs["dense_labels"].append(
-            batch["dense_label"].flatten().float()
+            batch["dense_label"].float()
         )
         self.validation_loss.append(loss.detach().item())
         return loss
@@ -131,36 +134,21 @@ class PrecTime(LightningModule):
     ) -> torch.Tensor:
         # convert sparse label to one hot encoding
         sparse_label = nn.functional.one_hot(
-            sparse_label.long(), num_classes=2
+            sparse_label.long(), num_classes=3
         )
-        loss_fn = nn.BCEWithLogitsLoss()
+        loss_fn = nn.CrossEntropyLoss()
         loss = loss_fn(sparse_predictions, sparse_label.float())
         return loss
 
     def dense_loss_calculation(
         self, dense_label: torch.Tensor, dense_predictions: torch.Tensor
     ) -> torch.Tensor:
-        dense_label = nn.functional.one_hot(dense_label.long(), num_classes=2)
-        loss_fn = nn.BCEWithLogitsLoss()
+        loss_fn = nn.CrossEntropyLoss()
         loss = loss_fn(dense_predictions, dense_label.float())
         return loss
 
     def on_train_epoch_end(self):
-        if self.current_epoch % 10 == 0:
-            all_preds = torch.cat(self.training_step_outputs["dense_preds"])
-            all_preds = all_preds.view(
-                all_preds.shape[0] * all_preds.shape[1], -1
-            )
-            all_preds = all_preds.detach().cpu().numpy()
-            all_labels = torch.cat(self.training_step_outputs["dense_labels"])
-            all_labels = all_labels.detach().cpu().numpy()
-
-            pr, re, f1, ac, cm = self.calculate_metrics(
-                labels=all_labels, preds=all_preds.argmax(axis=1)
-            )
-            cm = cm.rename({"labels": "Train"})
-            print(f"Train: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}")
-            print(cm)
+        self.training_step_outputs["keys"].clear()
         self.training_step_outputs["dense_preds"].clear()
         self.training_step_outputs["sparse_preds"].clear()
         self.training_step_outputs["dense_labels"].clear()
@@ -170,25 +158,31 @@ class PrecTime(LightningModule):
         best = False
         loss = np.array(self.validation_loss).mean()
 
-        if self.current_epoch % 10 == 0:
-            all_preds = torch.cat(self.validation_step_outputs["dense_preds"])
-            all_preds = all_preds.view(
-                all_preds.shape[0] * all_preds.shape[1], -1
-            )
-            all_preds = all_preds.detach().cpu().numpy()
-            all_labels = torch.cat(
-                self.validation_step_outputs["dense_labels"]
-            )
-            all_labels = all_labels.detach().cpu().numpy()
+        all_preds = torch.cat(self.validation_step_outputs["dense_preds"])
+        all_preds = all_preds.view(all_preds.shape[0] * all_preds.shape[1], -1)
+        all_preds = all_preds.detach().cpu().numpy()
+        all_labels = torch.cat(self.validation_step_outputs["dense_labels"])
+        all_labels = all_labels.view(
+            all_labels.shape[0] * all_labels.shape[1], -1
+        )
+        all_labels = all_labels.detach().cpu().numpy()
 
-            pr, re, f1, ac, cm = self.calculate_metrics(
-                labels=all_labels, preds=all_preds.argmax(axis=1)
-            )
-            cm = cm.rename({"labels": "Validation"})
-            print(
-                f"Validation: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}"
-            )
-            print(cm)
+        structured_preds = make_predictions(
+            self.validation_step_outputs["keys"],
+            self.validation_step_outputs["dense_preds"],
+        )
+        submission_df = make_submission(self.cfg, structured_preds)
+        score = calculate_score(self.cfg, pred_df=submission_df)
+
+        self.log_dict(
+            {
+                "val_score": score,
+            },
+            on_step=False,
+            on_epoch=True,
+            logger=True,
+            prog_bar=True,
+        )
 
         if loss < self.__best_loss:
             best = True
@@ -205,6 +199,7 @@ class PrecTime(LightningModule):
         ):
             self.model.load_state_dict(torch.load("best_model.pth"))
             self.val_loss_non_improvement = 0
+        self.validation_step_outputs["keys"].clear()
         self.validation_step_outputs["dense_preds"].clear()
         self.validation_step_outputs["sparse_preds"].clear()
         self.validation_step_outputs["dense_labels"].clear()
@@ -235,7 +230,7 @@ class PrecTime(LightningModule):
         labels: torch.Tensor, preds: torch.Tensor
     ) -> tuple[float, float, float, float, pl.DataFrame]:
         pr, re, f1, _ = precision_recall_fscore_support(
-            labels, preds.round(), average="binary", zero_division=0
+            labels, preds.round(), average="weighted", zero_division=0
         )
         accuracy = (labels == preds).mean()
         cm = confusion_matrix(labels, preds)

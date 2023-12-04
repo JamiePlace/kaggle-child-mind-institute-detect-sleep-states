@@ -1,3 +1,4 @@
+from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
@@ -84,8 +85,13 @@ def expand_sparse_label(
 
 
 # finish calculating the score
-def calculate_score(cfg: TrainConfig, series_id: str | None = None):
-    pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
+def calculate_score(
+    cfg: TrainConfig,
+    pred_df: Optional[pl.DataFrame] = None,
+    series_id: str | None = None,
+):
+    if pred_df is None:
+        pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
     if series_id:
         pred_df = pred_df.filter(pl.col("series_id") == series_id)
     event_df = (
@@ -131,7 +137,7 @@ def main(cfg: TrainConfig):
     valid_score = calculate_score(cfg)  # type: ignore
     print(f"valid score: {valid_score:.4f}")
 
-    score = calculate_score(cfg, series_id)
+    score = calculate_score(cfg, series_id=series_id)
     print(f"score: {score:.4f}")
 
     (

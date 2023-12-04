@@ -25,7 +25,7 @@ class PrecTimeModel(nn.Module):
         self.context_extractor = ContextEncoder(
             input_size=cfg.dataset.window_size * base_filters,
         )
-        self.fc_sparse = nn.Linear(200, 2)
+        self.fc_sparse = nn.Linear(200, n_classes)
         self.upsample_or_downsample = nn.AdaptiveAvgPool1d(
             cfg.dataset.window_size
         )
@@ -36,7 +36,7 @@ class PrecTimeModel(nn.Module):
         )
         self.fc_dense = nn.Linear(
             base_filters * cfg.dataset.window_size * 2,
-            cfg.dataset.window_size * 2,
+            cfg.dataset.window_size * n_classes,
         )
         self.softmax_sparse = nn.Softmax(dim=1)
         self.softmax_dense = nn.Softmax(dim=1)

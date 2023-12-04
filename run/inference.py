@@ -12,7 +12,7 @@ from pytorch_lightning import seed_everything
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.conf import InferenceConfig
+from src.conf import InferenceConfig, TrainConfig
 from src.datamodule.prectime import (
     TestDataset,
 )
@@ -104,11 +104,10 @@ def inference(
 
 
 def make_submission(
-    cfg: InferenceConfig,
+    cfg: InferenceConfig | TrainConfig,
     preds: dict[str, np.ndarray],
-    series_length: dict[str, int],
 ) -> pl.DataFrame:
-    sub_df = post_process_for_prec(cfg, preds, series_length)
+    sub_df = post_process_for_prec(cfg, preds)
     sub_df = sub_df.drop_nulls()
 
     return sub_df
@@ -120,9 +119,22 @@ def make_predictions(key_list: list[str], pred_list: list[np.ndarray]):
         for i, key_sub_list in enumerate(key_list):
             for j, key_id in enumerate(key_sub_list):
                 key = key_id.split("_")[0]
+                if len(pred_list) == 0:
+                    continue
                 if key not in grouped_preds.keys():
                     grouped_preds[key] = []
-                grouped_preds[key] += pred_list[i].flatten().tolist()
+                if type(pred_list[i]) == torch.Tensor:
+                    grouped_preds[key].append(
+                        pred_list[i].detach().cpu().numpy()
+                    )
+                else:
+                    grouped_preds[key].append(pred_list[i])
+    for key in grouped_preds.keys():
+        grouped_preds[key] = np.vstack(grouped_preds[key])
+        grouped_preds[key] = np.reshape(
+            grouped_preds[key],
+            (grouped_preds[key].shape[0] * grouped_preds[key].shape[1], -1),
+        )
     return grouped_preds
 
 
@@ -145,7 +157,7 @@ def main(cfg: InferenceConfig):
 
     with trace("make submission"):
         series_length = test_dataloader.dataset.series_length  # type: ignore
-        sub_df = make_submission(cfg, grouped_preds, series_length)
+        sub_df = make_submission(cfg, grouped_preds)
     with trace(f"written to {Path(cfg.dir.sub_dir) / 'submission.csv'}"):
         dir = Path(cfg.dir.sub_dir) / "submission.csv"
         sub_df.write_csv(dir)  # type: ignore
