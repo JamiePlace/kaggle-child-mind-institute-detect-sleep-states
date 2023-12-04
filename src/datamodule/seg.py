@@ -132,6 +132,7 @@ def gaussian_label(label: np.ndarray, offset: int, sigma: int) -> np.ndarray:
         label[:, i] = np.convolve(
             label[:, i], gaussian_kernel(offset, sigma), mode="same"
         )
+        label[:, i] = label[:, i] / np.max(label[:, i])
 
     return label
 

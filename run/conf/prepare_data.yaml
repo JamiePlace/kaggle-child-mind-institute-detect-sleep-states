@@ -24,3 +24,5 @@ dataset:
   batch_size: 128
   window_size: 100
   on_training: false
+  offset: 10
+  sigma: 10

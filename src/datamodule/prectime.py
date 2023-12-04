@@ -44,31 +44,37 @@ def load_features(
 
 
 def split_array_into_chunks(
+    cfg: PrepareDataConfig,
     array: np.ndarray,
     event_df: Optional[pl.DataFrame],
     window_size: int,
     phase: str,
-    inference: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     # clean up the array such that we don't have data passed the last event
-    if phase == "train" and not inference:
-        array = array[: event_df["wakeup"].max(), :]  # type: ignore
 
     num_rows = array.shape[0]
     num_chunks = num_rows // window_size
     remaining_rows = num_rows % window_size
     number_of_steps = array.shape[0]
+    if event_df is not None and event_df.shape[0] == 0:
+        return array, np.array(None), np.array(None), number_of_steps
 
     # for training we need the label
     if phase == "train":
         # create the label from the event_df
-        label = np.zeros(array.shape[0])
+        label = np.zeros((array.shape[0], 3))
         # for each row of event_df find the corresponding rows in array from
         # event_df["onset"] to event_df["wakeup"] to set the label to 1
+        last_wakeup = 0
         for row in event_df.rows(named=True):  # type: ignore
-            label[row["onset"] : row["wakeup"] + 1] = 1
+            label[row["onset"], 1] = 1
+            label[row["wakeup"], 2] = 1
+            label[last_wakeup : row["onset"], 0] = 1
+            last_wakeup = row["wakeup"]
 
-        array = np.concatenate((array, label[:, None]), axis=1)
+        # convolve the label with a gaussian kernel
+        label = gaussian_label(label, cfg.dataset.offset, cfg.dataset.sigma)
+        array = np.concatenate((array, label), axis=1)
     # Split the array into chunks of size window_size
     chunks = np.split(array[: num_chunks * window_size], num_chunks)
 
@@ -84,15 +90,15 @@ def split_array_into_chunks(
     chunks = np.array(chunks)
 
     if phase == "train":
-        dense_labels = chunks[:, :, -1]
+        dense_labels = chunks[:, :, -3:]
         sparse_labels = np.array(
             [
-                0 if val < window_size // 2 else 1
-                for val in chunks[:, :, -1].sum(axis=1)
+                np.bincount(val).argmax()
+                for val in chunks[:, :, -3:].argmax(axis=2)
             ]
         )
 
-        return chunks[:, :, :-1], dense_labels, sparse_labels, 0
+        return chunks[:, :, :-3], dense_labels, sparse_labels, 0
     return chunks, np.array(None), np.array(None), number_of_steps
 
 
@@ -103,8 +109,28 @@ def truncate_features(
     last_wakeup_step = event_df.get_column("wakeup").max()
     # truncate features
     if last_wakeup_step is not None:
-        features = features[:last_wakeup_step, :]
+        max_len = len(features) - last_wakeup_step  # type: ignore
+        features = features[: (last_wakeup_step + min(max_len, 500)), :]  # type: ignore
     return features
+
+
+def gaussian_kernel(length: int, sigma: int = 3) -> np.ndarray:
+    x = np.ogrid[-length : length + 1]
+    h = np.exp(-(x**2) / (2 * sigma * sigma))  # type: ignore
+    h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    return h
+
+
+def gaussian_label(label: np.ndarray, offset: int, sigma: int) -> np.ndarray:
+    num_events = label.shape[1]
+    for i in range(num_events):
+        label[:, i] = np.convolve(
+            label[:, i], gaussian_kernel(offset, sigma), mode="same"
+        )
+        if label[:, i].max() > 0:
+            label[:, i] = label[:, i] / label[:, i].max()
+
+    return label
 
 
 ###################
@@ -147,11 +173,14 @@ def pre_process_for_training(cfg: PrepareDataConfig):
             sparse_labels,
             _,
         ) = split_array_into_chunks(
+            cfg,
             series_features,
             series_event_df,
             cfg.dataset.window_size,
             phase="train",
         )
+        if np.array_equal(series_chunks, series_features):
+            continue
         if series_chunks.shape[0] % cfg.dataset.batch_size != 0:
             # pad the series_chunks with zeros
             pad_size = cfg.dataset.batch_size - (
@@ -172,7 +201,13 @@ def pre_process_for_training(cfg: PrepareDataConfig):
             dense_labels = np.concatenate(
                 (
                     dense_labels,
-                    np.zeros((pad_size, dense_labels.shape[1])),
+                    np.zeros(
+                        (
+                            pad_size,
+                            dense_labels.shape[1],
+                            dense_labels.shape[2],
+                        )
+                    ),
                 )
             )
             sparse_labels = np.concatenate(
@@ -266,12 +301,18 @@ def pre_process_for_inference(cfg: PrepareDataConfig):
         )
 
         series_features = features[series_id]
+        if event_df is not None:
+            series_event_df = event_df.filter(pl.col("series_id") == series_id)
+            if series_event_df.shape[0] == 0:
+                continue
+        else:
+            series_event_df = None
         series_chunks, _, _, number_of_steps = split_array_into_chunks(
+            cfg,
             series_features,
-            event_df,
+            series_event_df,
             cfg.dataset.window_size,
             phase=cfg.phase,
-            inference=True,
         )
         if series_chunks.shape[0] % cfg.dataset.batch_size != 0:
             # pad the series_chunks with zeros
@@ -434,7 +475,7 @@ class PrecTimeDataModule(LightningDataModule):
             shuffle=True,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=True,
-            drop_last=True,
+            drop_last=False,
             persistent_workers=True,
         )
         return train_loader

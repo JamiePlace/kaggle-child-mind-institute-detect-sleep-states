@@ -29,8 +29,11 @@
             "justMyCode": false,
             "args": [
                 "dir=local",
-                "batch_size=128",
-                "phase=test",
+                "dataset.batch_size=32",
+                "dataset.window_size=768",
+                "dataset.offset=10",
+                "dataset.sigma=10",
+                "phase=train",
             ]
         },
         {
