@@ -42,11 +42,11 @@
             "justMyCode": false,
             "args": [
                 "exp_name=expdebug",
-                "dataset.batch_size=128",
-                "dataset.num_workers=1",
+                "dataset.batch_size=32",
+                "dataset.num_workers=5",
                 "trainer.debug=false",
                 "refresh_processed_data=false",
-                "window_size=100",
+                "dataset.window_size=768",
             ]
         },
         {

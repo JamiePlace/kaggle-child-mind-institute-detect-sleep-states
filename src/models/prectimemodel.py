@@ -23,26 +23,23 @@ class PrecTimeModel(nn.Module):
             in_channels=in_channels, base_filters=base_filters
         )
         self.context_extractor = ContextEncoder(
-            input_size=cfg.dataset.window_size * 128,
-        )
-        if 200 > cfg.dataset.window_size:
-            self.upsample_or_downsample = nn.AdaptiveAvgPool1d(
-                cfg.dataset.window_size
-            )
-        else:
-            self.upsample_or_downsample = nn.Upsample(
-                size=(base_filters, cfg.dataset.window_size),
-                mode="bilinear",
-                align_corners=True,
-            )
-        self.prediction_refinor = CNNrefinor(
-            cfg,
-            in_channels=cfg.dataset.window_size * 2,
-            base_filters=base_filters,
+            input_size=cfg.dataset.window_size * base_filters,
         )
         self.fc_sparse = nn.Linear(200, 2)
-        self.sigmoid_sparse = nn.Sigmoid()
-        self.sigmoid_dense = nn.Sigmoid()
+        self.upsample_or_downsample = nn.AdaptiveAvgPool1d(
+            cfg.dataset.window_size
+        )
+        self.prediction_refinor = CNNrefinor(
+            cfg,
+            in_channels=base_filters + 1,
+            base_filters=base_filters,
+        )
+        self.fc_dense = nn.Linear(
+            base_filters * cfg.dataset.window_size * 2,
+            cfg.dataset.window_size * 2,
+        )
+        self.softmax_sparse = nn.Softmax(dim=1)
+        self.softmax_dense = nn.Softmax(dim=1)
 
     def forward(
         self,
@@ -59,15 +56,20 @@ class PrecTimeModel(nn.Module):
         x1, x2 = self.feature_extractor(x)
         x1 = self.context_extractor(x1)
         sparse_prediction = self.fc_sparse(x1)
-        sparse_prediction = self.sigmoid_sparse(sparse_prediction)
+        sparse_prediction = self.softmax_sparse(sparse_prediction)
         x1 = self.upsample_or_downsample(x1)
-        new_x = torch.zeros(x1.shape[0], x2.shape[1] * 2, x2.shape[2] * 2).to(
+        x1 = x1.view(x1.shape[0], 1, x1.shape[1])
+        new_x = torch.zeros(x1.shape[0], x2.shape[1] + 1, x2.shape[2]).to(
             x1.device
         )
-        new_x[:, : x2.shape[1], : x2.shape[2]] = x2
-        new_x[:, x2.shape[1] :, x2.shape[2] :] = x1
+        new_x[:, : x2.shape[1], :] = x2
+        new_x[:, x2.shape[1] :, :] = x1
         new_x = self.prediction_refinor(new_x)
-        dense_prediction = self.sigmoid_dense(new_x)
+        new_x = self.fc_dense(new_x)
+        new_x = new_x.view(
+            new_x.shape[0], self.cfg.dataset.window_size, self.n_classes
+        )
+        dense_prediction = self.softmax_dense(new_x)
         return {
             "sparse_predictions": sparse_prediction.squeeze(),
             "dense_predictions": dense_prediction.squeeze(),

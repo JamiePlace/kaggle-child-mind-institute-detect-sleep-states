@@ -224,10 +224,6 @@ class CNNrefinor(nn.Module):
             padding="same",
         )
         self.dropout = nn.Dropout(p=dropout)
-        self.linear = nn.Linear(
-            in_features=65536,
-            out_features=cfg.dataset.window_size,
-        )
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight)
@@ -241,11 +237,10 @@ class CNNrefinor(nn.Module):
         Returns:
             Tuple[Tensor, Tensor]: (some number), (batch_size, base_filters, some number)
         """
-        x = x.view((x.shape[0], self.in_channels, -1))
-        x = self.conv1(x)
+        # x = x.view((x.shape[0], self.in_channels, -1))
+        x = self.conv1(x)  # (batch_size, base_filters,
         x = self.upsample(x)
         x = self.conv2(x)
         x = self.dropout(x)
         x = x.flatten(1)
-        x = self.linear(x)
         return x

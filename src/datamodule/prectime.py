@@ -335,8 +335,8 @@ class TrainDataset(Dataset):
         self.train_data_files = pickle.load(fileobj)
         fileobj.close()
 
-        self.train_data_files = np.random.shuffle(
-            np.array(self.train_data_files)
+        self.train_data_files = np.random.choice(
+            self.train_data_files, len(self.train_data_files), replace=False
         )  # type: ignore
 
     def __len__(self):

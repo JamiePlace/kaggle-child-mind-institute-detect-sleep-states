@@ -114,6 +114,18 @@ def make_submission(
     return sub_df
 
 
+def make_predictions(key_list: list[str], pred_list: list[np.ndarray]):
+    grouped_preds = {}
+    with trace("grouping predctions"):
+        for i, key_sub_list in enumerate(key_list):
+            for j, key_id in enumerate(key_sub_list):
+                key = key_id.split("_")[0]
+                if key not in grouped_preds.keys():
+                    grouped_preds[key] = []
+                grouped_preds[key] += pred_list[i].flatten().tolist()
+    return grouped_preds
+
+
 @hydra.main(config_path="conf", config_name="inference", version_base="1.2")
 def main(cfg: InferenceConfig):
     with trace("load test dataloader"):
@@ -125,18 +137,11 @@ def main(cfg: InferenceConfig):
     # time.sleep(120)
     with trace("inference"):
         key_list, pred_list = inference(cfg, test_dataloader, model, device)
-    grouped_preds = {}
-    with trace("grouping predctions"):
-        for i, key_sub_list in enumerate(key_list):
-            for j, key_id in enumerate(key_sub_list):
-                key = key_id.split("_")[0]
-                if key not in grouped_preds.keys():
-                    grouped_preds[key] = []
-                grouped_preds[key] += pred_list[i].flatten().tolist()
 
-    # with trace("saving predictions"):
-    #    with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
-    #        pickle.dump(grouped_preds, fj
+    grouped_preds = make_predictions(key_list, pred_list)
+    with trace("saving predictions"):
+        with open(Path(cfg.dir.sub_dir) / "predictions.pkl", "wb") as f:
+            pickle.dump(grouped_preds, f)
 
     with trace("make submission"):
         series_length = test_dataloader.dataset.series_length  # type: ignore

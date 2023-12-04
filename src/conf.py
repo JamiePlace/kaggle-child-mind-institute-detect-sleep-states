@@ -61,6 +61,7 @@ class DatasetConfig:
     window_size: int
     batch_size: int
     on_training: bool
+    series_ids: list[str]
 
 
 @dataclass

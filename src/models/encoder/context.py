@@ -46,7 +46,18 @@ class ContextEncoder(nn.Module):
         # we can do this by swapping the second and third dimensions
         # and declaring the first dimension is not the batch size
         x = x.view(1, x.shape[0], x.shape[1])
-        x, _ = self.lstm1(x)
-        x, _ = self.lstm2(x)
+        x, (h_0, c_0) = self.lstm1(x)
+        # reshape due to bi directional
+        bi_h_0 = torch.zeros(h_0.shape[0], h_0.shape[1], h_0.shape[2] * 2).to(
+            x.device
+        )
+        bi_c_0 = torch.zeros(c_0.shape[0], c_0.shape[1], c_0.shape[2] * 2).to(
+            x.device
+        )
+        bi_h_0[:, :, : int(h_0.shape[2])] = h_0
+        bi_h_0[:, :, int(h_0.shape[2]) :] = torch.flip(h_0, [2])
+        bi_c_0[:, :, : int(c_0.shape[2])] = c_0
+        bi_c_0[:, :, int(c_0.shape[2]) :] = torch.flip(c_0, [2])
+        x, _ = self.lstm2(x, (bi_h_0, bi_c_0))
         x = x.squeeze()
         return x

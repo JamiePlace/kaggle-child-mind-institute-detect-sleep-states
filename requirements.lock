@@ -84,6 +84,7 @@ pathtools==0.1.2
 pickleshare==0.7.5
 pillow==10.0.1
 platformdirs==3.11.0
+plotly==5.18.0
 polars==0.19.8
 pooch==1.7.0
 pretrainedmodels==0.7.4

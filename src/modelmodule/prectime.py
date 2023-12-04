@@ -16,6 +16,7 @@ from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from src.conf import TrainConfig
 from src.utils.metrics import event_detection_ap
 from src.models.prectimemodel import PrecTimeModel
+from run.inference import make_predictions
 
 
 class PrecTime(LightningModule):
@@ -65,7 +66,7 @@ class PrecTime(LightningModule):
         self.training_step_outputs["sparse_preds"].append(
             sparse_preds.argmax(dim=1)
         )
-        self.training_step_outputs["dense_preds"].append(dense_preds.flatten())
+        self.training_step_outputs["dense_preds"].append(dense_preds)
         self.training_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
         )
@@ -88,9 +89,7 @@ class PrecTime(LightningModule):
         self.validation_step_outputs["sparse_preds"].append(
             sparse_preds.argmax(dim=1)
         )
-        self.validation_step_outputs["dense_preds"].append(
-            dense_preds.flatten()
-        )
+        self.validation_step_outputs["dense_preds"].append(dense_preds)
         self.validation_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
         )
@@ -141,6 +140,7 @@ class PrecTime(LightningModule):
     def dense_loss_calculation(
         self, dense_label: torch.Tensor, dense_predictions: torch.Tensor
     ) -> torch.Tensor:
+        dense_label = nn.functional.one_hot(dense_label.long(), num_classes=2)
         loss_fn = nn.BCEWithLogitsLoss()
         loss = loss_fn(dense_predictions, dense_label.float())
         return loss
@@ -148,13 +148,15 @@ class PrecTime(LightningModule):
     def on_train_epoch_end(self):
         if self.current_epoch % 10 == 0:
             all_preds = torch.cat(self.training_step_outputs["dense_preds"])
+            all_preds = all_preds.view(
+                all_preds.shape[0] * all_preds.shape[1], -1
+            )
             all_preds = all_preds.detach().cpu().numpy()
             all_labels = torch.cat(self.training_step_outputs["dense_labels"])
             all_labels = all_labels.detach().cpu().numpy()
 
-            all_preds = all_preds.round()
             pr, re, f1, ac, cm = self.calculate_metrics(
-                labels=all_labels, preds=all_preds
+                labels=all_labels, preds=all_preds.argmax(axis=1)
             )
             cm = cm.rename({"labels": "Train"})
             print(f"Train: Precision: {pr}, Recall: {re}, F1: {f1}, Acc: {ac}")
@@ -170,15 +172,17 @@ class PrecTime(LightningModule):
 
         if self.current_epoch % 10 == 0:
             all_preds = torch.cat(self.validation_step_outputs["dense_preds"])
+            all_preds = all_preds.view(
+                all_preds.shape[0] * all_preds.shape[1], -1
+            )
             all_preds = all_preds.detach().cpu().numpy()
             all_labels = torch.cat(
                 self.validation_step_outputs["dense_labels"]
             )
             all_labels = all_labels.detach().cpu().numpy()
 
-            all_preds = all_preds.round()
             pr, re, f1, ac, cm = self.calculate_metrics(
-                labels=all_labels, preds=all_preds
+                labels=all_labels, preds=all_preds.argmax(axis=1)
             )
             cm = cm.rename({"labels": "Validation"})
             print(
@@ -212,19 +216,19 @@ class PrecTime(LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.cfg.optimizer.lr)
-        scheduler = get_polynomial_decay_schedule_with_warmup(
+        # scheduler = get_polynomial_decay_schedule_with_warmup(
+        #    optimizer,
+        #    num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
+        #    num_training_steps=self.trainer.max_steps,
+        #    power=self.cfg.scheduler.power,
+        #    lr_end=0,
+        # )
+        scheduler = get_cosine_schedule_with_warmup(
             optimizer,
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
             num_training_steps=self.trainer.max_steps,
-            power=self.cfg.scheduler.power,
-            lr_end=0,
         )
-        # scheduler = get_cosine_schedule_with_warmup(
-        # optimizer,
-        # num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
-        # num_training_steps=self.trainer.max_steps,
-        # )
-        return [optimizer]  # , [{"scheduler": scheduler, "interval": "step"}]
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     @staticmethod
     def calculate_metrics(

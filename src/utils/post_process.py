@@ -130,9 +130,6 @@ def merge_short_events(
         (pl.col("event") == "wakeup")
         & ~pl.col("group").is_in(wakeup_groups_to_remove)
     )
-    wakeup_events = wakeup_events.with_columns(
-        [pl.col(n).cast(t) for n, t in onset_events.schema.items()]
-    )
     merged_df = onset_events.vstack(wakeup_events)
 
     merged_df = merged_df.select(["series_id", "step", "event", "score"]).sort(
