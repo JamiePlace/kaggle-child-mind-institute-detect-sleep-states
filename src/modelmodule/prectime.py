@@ -89,9 +89,7 @@ class PrecTime(LightningModule):
             prog_bar=True,
         )
         self.validation_step_outputs["keys"].append(batch["key"])
-        self.validation_step_outputs["sparse_preds"].append(
-            sparse_preds.argmax(dim=1)
-        )
+        self.validation_step_outputs["sparse_preds"].append(sparse_preds)
         self.validation_step_outputs["dense_preds"].append(dense_preds)
         self.validation_step_outputs["sparse_labels"].append(
             batch["sparse_label"].float()
@@ -133,10 +131,7 @@ class PrecTime(LightningModule):
         self, sparse_label: torch.Tensor, sparse_predictions: torch.Tensor
     ) -> torch.Tensor:
         # convert sparse label to one hot encoding
-        sparse_label = nn.functional.one_hot(
-            sparse_label.long(), num_classes=3
-        )
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = nn.BCEWithLogitsLoss()
         loss = loss_fn(sparse_predictions, sparse_label.float())
         return loss
 
@@ -144,15 +139,10 @@ class PrecTime(LightningModule):
         self, dense_label: torch.Tensor, dense_predictions: torch.Tensor
     ) -> torch.Tensor:
         loss_fn = nn.BCEWithLogitsLoss()
-        loss1 = loss_fn(
-            dense_predictions[:, :, 1], dense_label[:, :, 1].float()
-        )
-        loss2 = loss_fn(
-            dense_predictions[:, :, 2], dense_label[:, :, 2].float()
-        )
-        return (loss1 + loss2) / 2
+        return loss_fn(dense_predictions, dense_label.float())
 
     def on_train_epoch_end(self):
+        print(max(self.training_step_outputs["dense_preds"]))
         self.training_step_outputs["keys"].clear()
         self.training_step_outputs["dense_preds"].clear()
         self.training_step_outputs["sparse_preds"].clear()
@@ -228,7 +218,7 @@ class PrecTime(LightningModule):
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
             num_training_steps=self.trainer.max_steps,
         )
-        return [optimizer]  # , [{"scheduler": scheduler, "interval": "step"}]
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     @staticmethod
     def calculate_metrics(

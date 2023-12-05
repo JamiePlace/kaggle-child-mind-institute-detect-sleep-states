@@ -104,7 +104,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=1,
                 padding="same",
@@ -114,7 +114,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=base_filters,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_left,
                 padding="same",
@@ -122,7 +122,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=base_filters,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_left,
                 padding="same",
@@ -130,7 +130,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=base_filters,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_left,
                 padding="same",
@@ -140,7 +140,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_right,
                 padding="same",
@@ -150,7 +150,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=base_filters,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_right,
                 padding="same",
@@ -158,7 +158,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=base_filters,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_right,
                 padding="same",
@@ -166,7 +166,7 @@ class CNNextractor(nn.Module):
             nn.Conv1d(
                 in_channels=base_filters,
                 out_channels=base_filters,
-                kernel_size=5,
+                kernel_size=11,
                 stride=1,
                 dilation=dilation_right,
                 padding="same",
@@ -209,7 +209,7 @@ class CNNrefinor(nn.Module):
         self.conv1 = nn.Conv1d(
             in_channels=in_channels,
             out_channels=base_filters,
-            kernel_size=5,
+            kernel_size=11,
             stride=1,
             dilation=1,
             padding="same",
@@ -218,7 +218,7 @@ class CNNrefinor(nn.Module):
         self.conv2 = nn.Conv1d(
             in_channels=base_filters,
             out_channels=base_filters,
-            kernel_size=5,
+            kernel_size=11,
             stride=1,
             dilation=1,
             padding="same",

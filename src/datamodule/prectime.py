@@ -62,18 +62,15 @@ def split_array_into_chunks(
     # for training we need the label
     if phase == "train":
         # create the label from the event_df
-        label = np.zeros((array.shape[0], 3))
+        label = np.zeros(array.shape[0])
         # for each row of event_df find the corresponding rows in array from
         # event_df["onset"] to event_df["wakeup"] to set the label to 1
-        last_wakeup = 0
         for row in event_df.rows(named=True):  # type: ignore
-            label[row["onset"], 1] = 1
-            label[row["wakeup"], 2] = 1
-            label[last_wakeup : row["onset"], 0] = 1
-            last_wakeup = row["wakeup"]
+            label[row["onset"] : (row["wakeup"] + 1)] = 1
 
         # convolve the label with a gaussian kernel
-        label = gaussian_label(label, cfg.dataset.offset, cfg.dataset.sigma)
+        # label = gaussian_label(label, cfg.dataset.offset, cfg.dataset.sigma)
+        label = np.reshape(label, (label.shape[0], 1))
         array = np.concatenate((array, label), axis=1)
     # Split the array into chunks of size window_size
     chunks = np.split(array[: num_chunks * window_size], num_chunks)
@@ -90,24 +87,14 @@ def split_array_into_chunks(
     chunks = np.array(chunks)
 
     if phase == "train":
-        dense_labels = chunks[:, :, -3:]
+        dense_labels = chunks[:, :, -1:]
         # alter sparse labels after defining dense to remove the "awake" period
         sparse_labels = chunks
-        onset_steps = np.where(sparse_labels[:,:,-2] > 0)
-        wakeup_steps = np.where(sparse_labels[:,:,-1] > 0)
-        for row, col in zip(onset_steps[0], onset_steps[1]):
-            sparse_labels[row, col, -3] = 0
-        for row, col in zip(wakeup_steps[0], wakeup_steps[1]):
-            sparse_labels[row, col, -3] = 0
-
         sparse_labels = np.array(
-            [
-                np.bincount(val).argmax()
-                for val in sparse_labels[:, :, -3:].argmax(axis=2)
-            ]
+            [int(sum(val) / 2) for val in sparse_labels[:, :, -1]]
         )
-
-        return chunks[:, :, :-3], dense_labels, sparse_labels, 0
+        sparse_labels[sparse_labels>0]=1
+        return chunks[:, :, :-1], dense_labels, sparse_labels, 0
     return chunks, np.array(None), np.array(None), number_of_steps
 
 
@@ -384,9 +371,12 @@ class TrainDataset(Dataset):
         fileobj = open(keys_file, "rb")
         self.train_data_files = pickle.load(fileobj)
         fileobj.close()
-
+        if cfg.subsample:
+            n_samples = int(len(self.train_data_files) * cfg.subsample_rate)
+        else:
+            n_samples = len(self.train_data_files)
         self.train_data_files = np.random.choice(
-            self.train_data_files, len(self.train_data_files), replace=False
+            self.train_data_files, n_samples, replace=False
         )  # type: ignore
 
     def __len__(self):

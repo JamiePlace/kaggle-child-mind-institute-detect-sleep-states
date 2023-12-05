@@ -73,15 +73,16 @@ def post_process_for_prec(
 
     records = []
     for series_id in series_ids:
-        this_series_preds = np.array(preds[series_id])
+        this_series_preds = np.array(preds[series_id]).flatten()
+        this_series_preds_diff = np.diff(this_series_preds)
+        onset_steps = np.where(this_series_preds_diff >= cfg.pp.score_th)[0]
+        wakeup_steps = np.where(this_series_preds_diff <= -cfg.pp.score_th)[0]
 
         for i, event_name in enumerate(["onset", "wakeup"]):
-            steps = find_peaks(
-                this_series_preds[:, i + 1],
-                height=cfg.pp.score_th,
-                distance=cfg.pp.distance,
-            )[0]
-            scores = this_series_preds[steps, i + 1]
+            steps = onset_steps if i == 0 else wakeup_steps
+            if i == 1:
+                steps -= 1
+            scores = this_series_preds[steps]
 
             for step, score in zip(steps, scores):
                 records.append(

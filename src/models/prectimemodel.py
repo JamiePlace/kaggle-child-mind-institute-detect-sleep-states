@@ -23,11 +23,11 @@ class PrecTimeModel(nn.Module):
             in_channels=in_channels, base_filters=base_filters
         )
         self.context_extractor = ContextEncoder(
-            input_size=(cfg.dataset.window_size - 1) * base_filters,
+            input_size=(cfg.dataset.window_size) * base_filters,
         )
-        self.fc_sparse = nn.Linear(200, n_classes)
+        self.fc_sparse = nn.Linear(200, 1)
         self.upsample_or_downsample = nn.AdaptiveAvgPool1d(
-            cfg.dataset.window_size - 1
+            cfg.dataset.window_size
         )
         self.prediction_refinor = CNNrefinor(
             cfg,
@@ -35,11 +35,11 @@ class PrecTimeModel(nn.Module):
             base_filters=base_filters,
         )
         self.fc_dense = nn.Linear(
-            base_filters * (cfg.dataset.window_size - 1) * 2,
-            cfg.dataset.window_size * n_classes,
+            base_filters * (cfg.dataset.window_size) * 2,
+            cfg.dataset.window_size * 1,
         )
-        self.softmax_sparse = nn.Softmax(dim=1)
-        self.softmax_dense = nn.Softmax(dim=1)
+        self.softmax_sparse = nn.Sigmoid()
+        self.softmax_dense = nn.Sigmoid()
 
     def forward(
         self,
@@ -59,16 +59,9 @@ class PrecTimeModel(nn.Module):
         sparse_prediction = self.softmax_sparse(sparse_prediction)
         x1 = self.upsample_or_downsample(x1)
         x1 = x1.view(x1.shape[0], 1, x1.shape[1])
-        new_x = torch.zeros(x1.shape[0], x2.shape[1] + 1, x2.shape[2]).to(
-            x1.device
-        )
-        new_x[:, : x2.shape[1], :] = x2
-        new_x[:, x2.shape[1] :, :] = x1
+        new_x = torch.concatenate((x1, x2), dim=1).to(x1.device)
         new_x = self.prediction_refinor(new_x)
         new_x = self.fc_dense(new_x)
-        new_x = new_x.view(
-            new_x.shape[0], self.cfg.dataset.window_size, self.n_classes
-        )
         dense_prediction = self.softmax_dense(new_x)
         return {
             "sparse_predictions": sparse_prediction.squeeze(),
