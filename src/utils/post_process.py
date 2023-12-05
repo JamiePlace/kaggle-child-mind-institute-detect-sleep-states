@@ -1,6 +1,6 @@
 import numpy as np
 import polars as pl
-
+from scipy.signal import find_peaks
 from src.conf import InferenceConfig, TrainConfig
 
 
@@ -76,7 +76,11 @@ def post_process_for_prec(
         this_series_preds = np.array(preds[series_id])
 
         for i, event_name in enumerate(["onset", "wakeup"]):
-            steps = np.where(this_series_preds[:, i + 1] > cfg.pp.score_th)[0]
+            steps = find_peaks(
+                this_series_preds[:, i + 1],
+                height=cfg.pp.score_th,
+                distance=cfg.pp.distance,
+            )[0]
             scores = this_series_preds[steps, i + 1]
 
             for step, score in zip(steps, scores):
@@ -100,11 +104,6 @@ def post_process_for_prec(
         )
 
     sub_df = pl.DataFrame(records).sort(by=["series_id", "step"])
-    # sub_df = sub_df.to_pandas()
-    sub_df = sub_df.group_by("series_id", maintain_order=True).apply(
-        lambda x: drop_short_events(x, cfg.pp.distance)
-    )
-    sub_df = sub_df.sort(by=["series_id", "step"])
     row_ids = pl.Series(name="row_id", values=np.arange(len(sub_df)))
     sub_df = (
         sub_df.with_columns(row_ids)

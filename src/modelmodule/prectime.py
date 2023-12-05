@@ -124,7 +124,7 @@ class PrecTime(LightningModule):
         )
 
         return (
-            loss_sparse + (3 * loss_dense),
+            loss_sparse + (self.cfg.dense_weight * loss_dense),
             sparse_predictions,
             dense_predictions,
         )
@@ -143,9 +143,14 @@ class PrecTime(LightningModule):
     def dense_loss_calculation(
         self, dense_label: torch.Tensor, dense_predictions: torch.Tensor
     ) -> torch.Tensor:
-        loss_fn = nn.CrossEntropyLoss()
-        loss = loss_fn(dense_predictions, dense_label.float())
-        return loss
+        loss_fn = nn.BCEWithLogitsLoss()
+        loss1 = loss_fn(
+            dense_predictions[:, :, 1], dense_label[:, :, 1].float()
+        )
+        loss2 = loss_fn(
+            dense_predictions[:, :, 2], dense_label[:, :, 2].float()
+        )
+        return (loss1 + loss2) / 2
 
     def on_train_epoch_end(self):
         self.training_step_outputs["keys"].clear()
@@ -223,7 +228,7 @@ class PrecTime(LightningModule):
             num_warmup_steps=self.cfg.scheduler.num_warmup_steps,
             num_training_steps=self.trainer.max_steps,
         )
-        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+        return [optimizer]  # , [{"scheduler": scheduler, "interval": "step"}]
 
     @staticmethod
     def calculate_metrics(

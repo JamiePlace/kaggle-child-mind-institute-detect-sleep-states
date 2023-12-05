@@ -91,7 +91,8 @@ def event_detection_ap(
     submission = submission.sort_values(
         [series_id_column_name, time_column_name]
     )
-
+    if len(submission) == 0:
+        return 0
     # Extract scoring intervals.
     if use_scoring_intervals:
         # intervals = (

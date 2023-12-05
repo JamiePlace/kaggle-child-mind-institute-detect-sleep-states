@@ -19,6 +19,7 @@ exp_name: dummy
 refresh_processed_data: false
 subsample: true
 subsample_rate: 0.5
+dense_weight: 1.2
 
 trainer:
   epochs: 50

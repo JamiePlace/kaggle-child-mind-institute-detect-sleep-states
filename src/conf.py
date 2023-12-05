@@ -119,6 +119,7 @@ class TrainConfig:
     aug: AugmentationConfig
     pp: PostProcessConfig
     refresh_processed_data: bool
+    dense_weight: float
 
 
 @dataclass
