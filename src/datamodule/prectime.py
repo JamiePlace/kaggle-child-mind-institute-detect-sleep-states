@@ -91,10 +91,19 @@ def split_array_into_chunks(
 
     if phase == "train":
         dense_labels = chunks[:, :, -3:]
+        # alter sparse labels after defining dense to remove the "awake" period
+        sparse_labels = chunks
+        onset_steps = np.where(sparse_labels[:,:,-2] > 0)
+        wakeup_steps = np.where(sparse_labels[:,:,-1] > 0)
+        for row, col in zip(onset_steps[0], onset_steps[1]):
+            sparse_labels[row, col, -3] = 0
+        for row, col in zip(wakeup_steps[0], wakeup_steps[1]):
+            sparse_labels[row, col, -3] = 0
+
         sparse_labels = np.array(
             [
                 np.bincount(val).argmax()
-                for val in chunks[:, :, -3:].argmax(axis=2)
+                for val in sparse_labels[:, :, -3:].argmax(axis=2)
             ]
         )
 
