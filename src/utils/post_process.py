@@ -80,8 +80,8 @@ def post_process_for_prec(
 
         for i, event_name in enumerate(["onset", "wakeup"]):
             steps = onset_steps if i == 0 else wakeup_steps
-            if i == 1:
-                steps -= 1
+            if i == 0:
+                steps += 1
             scores = this_series_preds[steps]
 
             for step, score in zip(steps, scores):

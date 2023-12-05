@@ -142,7 +142,6 @@ class PrecTime(LightningModule):
         return loss_fn(dense_predictions, dense_label.float())
 
     def on_train_epoch_end(self):
-        print(max(self.training_step_outputs["dense_preds"]))
         self.training_step_outputs["keys"].clear()
         self.training_step_outputs["dense_preds"].clear()
         self.training_step_outputs["sparse_preds"].clear()
