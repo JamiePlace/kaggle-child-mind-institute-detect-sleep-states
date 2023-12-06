@@ -140,95 +140,95 @@ def main(cfg: TrainConfig):
     score = calculate_score(cfg, series_id=series_id)
     print(f"score: {score:.4f}")
 
-    (
-        sparse_label,
-        dense_label,
-        anglez,
-        enmo,
-        timestamp,
-        this_series_length,
-    ) = get_label(cfg, series_id)
-    timestamp = timestamp.to_numpy()
-    this_series_length = len(anglez)
-    # this_series_length = 15000
+    # (
+    # sparse_label,
+    # dense_label,
+    # anglez,
+    # enmo,
+    # timestamp,
+    # this_series_length,
+    # ) = get_label(cfg, series_id)
+    # timestamp = timestamp.to_numpy()
+    # this_series_length = len(anglez)
+    ## this_series_length = 15000
 
-    pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
-    pred_df = pred_df.filter(pl.col("series_id") == series_id)
-    group = np.arange(len(pred_df) // 2)
-    group = np.repeat(group, 2)
-    if len(pred_df) % 2 != 0:
-        group = np.append(group, group[-1] + 1)
-    pred_df = pred_df.with_columns(pl.Series(name="group", values=group))
+    # pred_df = pl.read_csv(Path(cfg.dir.sub_dir) / "submission.csv")
+    # pred_df = pred_df.filter(pl.col("series_id") == series_id)
+    # group = np.arange(len(pred_df) // 2)
+    # group = np.repeat(group, 2)
+    # if len(pred_df) % 2 != 0:
+    # group = np.append(group, group[-1] + 1)
+    # pred_df = pred_df.with_columns(pl.Series(name="group", values=group))
 
-    dense_preds = np.zeros(this_series_length)
-    pred_df = pred_df.pivot(
-        index=["series_id", "group"], columns="event", values="step"
-    )
+    # dense_preds = np.zeros(this_series_length)
+    # pred_df = pred_df.pivot(
+    # index=["series_id", "group"], columns="event", values="step"
+    # )
 
-    for row in pred_df.rows(named=True):
-        dense_preds[row["onset"] : row["wakeup"]] = 1
-    dense_preds = dense_preds[:this_series_length]
-    dense_label = dense_label[:this_series_length]
-    dense_logits = data[series_id][:this_series_length]
-    anglez = anglez[:this_series_length]
-    enmo = enmo[:this_series_length]
-    timestamp = timestamp[:this_series_length]
+    # for row in pred_df.rows(named=True):
+    # dense_preds[row["onset"] : row["wakeup"]] = 1
+    # dense_preds = dense_preds[:this_series_length]
+    # dense_label = dense_label[:this_series_length]
+    # dense_logits = data[series_id][:this_series_length]
+    # anglez = anglez[:this_series_length]
+    # enmo = enmo[:this_series_length]
+    # timestamp = timestamp[:this_series_length]
 
-    # insert axvlines at every window partition
-    window_partition = timestamp[:: cfg.dataset.window_size]
+    ## insert axvlines at every window partition
+    # window_partition = timestamp[:: cfg.dataset.window_size]
 
-    scale = 1080
-    for row in pred_df.rows(named=True):
-        start_idx = row["onset"] - scale
-        end_idx = row["wakeup"] + scale
-        pred_timestamp = timestamp[start_idx:end_idx]
-        pred_anglez = anglez[start_idx:end_idx]
-        pred_enmo = enmo[start_idx:end_idx]
-        pred_dense_label = dense_label[start_idx:end_idx]
-        pred_dense_preds = dense_preds[start_idx:end_idx]
-        pred_dense_logits = dense_logits[start_idx:end_idx]
-        window_mask = np.isin(pred_timestamp, window_partition)
-        sub_window_part = pred_timestamp[window_mask]
+    # scale = 1080
+    # for row in pred_df.rows(named=True):
+    # start_idx = row["onset"] - scale
+    # end_idx = row["wakeup"] + scale
+    # pred_timestamp = timestamp[start_idx:end_idx]
+    # pred_anglez = anglez[start_idx:end_idx]
+    # pred_enmo = enmo[start_idx:end_idx]
+    # pred_dense_label = dense_label[start_idx:end_idx]
+    # pred_dense_preds = dense_preds[start_idx:end_idx]
+    # pred_dense_logits = dense_logits[start_idx:end_idx]
+    # window_mask = np.isin(pred_timestamp, window_partition)
+    # sub_window_part = pred_timestamp[window_mask]
 
-        fig, ax = plt.subplots(4, 1)
-        ax[0].plot(pred_timestamp, pred_anglez, label="AngleZ")
-        ax[1].plot(pred_timestamp, pred_enmo, label="Enmo")
-        ax[2].plot(
-            pred_timestamp,
-            pred_dense_label,
-            label="Dense Label",
-            alpha=1,
-            c="black",
-        )
-        ax[2].plot(
-            pred_timestamp,
-            pred_dense_preds,
-            label="Dense Preds",
-            alpha=0.5,
-            c="red",
-            linestyle="--",
-        )
-        ax[2].vlines(
-            x=sub_window_part,
-            ymin=0,
-            ymax=1,
-            color="black",
-            linestyle="--",
-        )
-        ax[3].plot(
-            pred_timestamp,
-            pred_dense_logits,
-            label="Dense Logits",
-            alpha=1,
-            c="orange",
-        )
-        ax[0].legend()
-        ax[1].legend()
-        ax[2].legend()
-        ax[3].legend()
-        # plotly_fig = tls.mpl_to_plotly(fig)  ## convert
-        # iplot(plotly_fig, image_height=1080, image_width=1920)
-        plt.show()
+    # fig, ax = plt.subplots(4, 1)
+    # ax[0].plot(pred_timestamp, pred_anglez, label="AngleZ")
+    # ax[1].plot(pred_timestamp, pred_enmo, label="Enmo")
+    # ax[2].plot(
+    # pred_timestamp,
+    # pred_dense_label,
+    # label="Dense Label",
+    # alpha=1,
+    # c="black",
+    # )
+    # ax[2].plot(
+    # pred_timestamp,
+    # pred_dense_preds,
+    # label="Dense Preds",
+    # alpha=0.5,
+    # c="red",
+    # linestyle="--",
+    # )
+    # ax[2].vlines(
+    # x=sub_window_part,
+    # ymin=0,
+    # ymax=1,
+    # color="black",
+    # linestyle="--",
+    # )
+    # ax[3].plot(
+    # pred_timestamp,
+    # pred_dense_logits,
+    # label="Dense Logits",
+    # alpha=1,
+    # c="orange",
+    # )
+    # ax[0].legend()
+    # ax[1].legend()
+    # ax[2].legend()
+    # ax[3].legend()
+    ## plotly_fig = tls.mpl_to_plotly(fig)  ## convert
+    ## iplot(plotly_fig, image_height=1080, image_width=1920)
+    # plt.show()
 
 
 if __name__ == "__main__":
